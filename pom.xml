@@ -5,7 +5,7 @@
     <modelVersion>4.0.0</modelVersion>
 
     <groupId>preponderous</groupId>
-    <artifactId>GrafikLib</artifactId>
+    <artifactId>Graphik</artifactId>
     <version>0.1</version>
 
     <properties>
