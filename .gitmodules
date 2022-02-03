@@ -1,3 +1,6 @@
 [submodule "SDLAssist"]
 	path = SDLAssist
 	url = https://github.com/Preponderous-Software/SDLAssist
+[submodule "SDLGrid"]
+	path = SDLGrid
+	url = https://github.com/Preponderous-Software/SDLGrid
