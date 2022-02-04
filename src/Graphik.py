@@ -24,7 +24,7 @@ class Graphik:
 
     def drawButton(self, xpos, ypos, width, height, colorBox, colorText, sizeText, text, function):
         self.drawRectangle(xpos, ypos, width, height, colorBox)
-        self.drawText(text, xpos + (width//2), ypos + (height//2), sizeText, white)
+        self.drawText(text, xpos + (width//2), ypos + (height//2), sizeText, colorText)
         
         # if clicked then do function
         mouse = pygame.mouse.get_pos()
