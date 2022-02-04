@@ -6,6 +6,8 @@ red = (200,0,0)
 green = (0,200,0)
 blue = (0,0,200)
 
+graphiklibversion = "0.2-alpha-1"
+
 #  @author Daniel McCoy Stephenson
 #  @since February 3rd, 2022
 class Graphik:
@@ -14,12 +16,12 @@ class Graphik:
         displayHeight = 600
         self.gameDisplay = pygame.display.set_mode((displayWidth, displayHeight))
 
-        self.version = 0.1
+        self.version = graphiklibversion
 
     def __init__(self, gameDisplay):
         self.gameDisplay = gameDisplay
 
-        self.version = 0.1
+        self.version = graphiklibversion
 
     def getVersion(self):
         return self.version
