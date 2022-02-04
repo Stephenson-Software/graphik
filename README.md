@@ -1,5 +1,5 @@
 # Grafik
-This library is intended to assist developers with graphics programming.
+This library assists developers with graphics programming.
 
 ## Dependencies
 - pygame
