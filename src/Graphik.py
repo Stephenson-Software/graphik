@@ -9,6 +9,13 @@ blue = (0,0,200)
 #  @author Daniel McCoy Stephenson
 #  @since February 3rd, 2022
 class Graphik:
+    def __init__(self):
+        displayWidth = 900
+        displayHeight = 600
+        self.gameDisplay = pygame.display.set_mode((displayWidth, displayHeight))
+
+        self.version = 0.1
+
     def __init__(self, gameDisplay):
         self.gameDisplay = gameDisplay
 
