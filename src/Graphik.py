@@ -12,6 +12,11 @@ class Graphik:
     def __init__(self, gameDisplay):
         self.gameDisplay = gameDisplay
 
+        self.version = 0.1
+
+    def getVersion(self):
+        return self.version
+
     def drawRectangle(self, xpos, ypos, width, height, color):
         pygame.draw.rect(self.gameDisplay, color, [xpos, ypos, width, height])
 
