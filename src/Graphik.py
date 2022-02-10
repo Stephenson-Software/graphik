@@ -23,6 +23,9 @@ class Graphik:
 
         self.version = graphiklibversion
 
+    def getGameDisplay(self):
+        return self.gameDisplay
+
     def getVersion(self):
         return self.version
 
