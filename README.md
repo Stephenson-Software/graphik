@@ -1,4 +1,4 @@
-# Grafik
+# Graphik
 This library assists developers with graphics programming.
 
 ## Dependencies
