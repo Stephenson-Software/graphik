@@ -44,3 +44,8 @@ class Graphik:
             click = pygame.mouse.get_pressed()
             if click[0] == 1:
                 function()
+
+    def drawImage(self, file_path, xpos, ypos, width, height):
+        image = pygame.image.load(file_path)
+        image = pygame.transform.scale(image, (width, height))
+        self.gameDisplay.blit(image, (xpos, ypos))
