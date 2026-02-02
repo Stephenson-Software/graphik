@@ -45,10 +45,13 @@ class Graphik:
             if click[0] == 1:
                 function()
 
-    def drawImage(self, file_path, xpos, ypos, width, height):
+    def drawImage(self, filePath, xpos, ypos, width, height):
         try:
-            image = pygame.image.load(file_path)
+            image = pygame.image.load(filePath)
             image = pygame.transform.scale(image, (width, height))
             self.gameDisplay.blit(image, (xpos, ypos))
-        except (pygame.error, FileNotFoundError) as e:
-            raise type(e)(f"Failed to load image from '{file_path}': {e}")
+        except FileNotFoundError as e:
+            # Preserve the original exception and chain it
+            raise FileNotFoundError(f"Failed to load image from '{filePath}': {e}") from e
+        except pygame.error as e:
+            raise pygame.error(f"Failed to load image from '{filePath}': {e}") from e
