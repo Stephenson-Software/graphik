@@ -1,5 +1,7 @@
 import pygame
 
+from ._version import __version__
+
 
 #  @author Daniel McCoy Stephenson
 #  @since February 3rd, 2022
@@ -22,7 +24,7 @@ class Graphik:
         return self.gameDisplay
 
     def getVersion(self):
-        return self.version
+        return __version__
 
     def drawRectangle(self, xpos, ypos, width, height, color):
         pygame.draw.rect(self.gameDisplay, color, [xpos, ypos, width, height])
