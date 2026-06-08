@@ -3,6 +3,7 @@ import subprocess
 import sys
 
 import pygame
+import pytest
 
 import preponderous.graphik as graphik_pkg
 from preponderous.graphik import Graphik
@@ -73,3 +74,34 @@ def test_package_imports_without_pygame():
     )
     assert result.returncode == 0, result.stderr
     assert result.stdout.strip() == graphik_pkg.__version__
+
+
+def _write_solid_image(path, color, size=(4, 4)):
+    # BMP is supported by pygame without SDL_image, so the fixture is portable.
+    surface = pygame.Surface(size)
+    surface.fill(color)
+    pygame.image.save(surface, str(path))
+
+
+def test_draw_image_blits_scaled_image_to_position(tmp_path):
+    pygame.display.init()
+    display = pygame.display.set_mode((20, 20))
+    display.fill((0, 0, 0))
+    graphik = Graphik(display)
+
+    image_path = tmp_path / "red.bmp"
+    _write_solid_image(image_path, (255, 0, 0))
+
+    # Scale a 4x4 red image up to 10x10 and blit it at the origin.
+    graphik.drawImage(str(image_path), 0, 0, 10, 10)
+
+    # A pixel inside the drawn 10x10 region is red; one outside stays untouched.
+    assert tuple(display.get_at((5, 5)))[:3] == (255, 0, 0)
+    assert tuple(display.get_at((15, 15)))[:3] == (0, 0, 0)
+
+
+def test_draw_image_missing_file_raises(tmp_path):
+    graphik = _make_graphik()
+    missing = tmp_path / "does_not_exist.bmp"
+    with pytest.raises((FileNotFoundError, pygame.error)):
+        graphik.drawImage(str(missing), 0, 0, 10, 10)
