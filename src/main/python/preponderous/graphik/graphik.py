@@ -6,18 +6,21 @@ from ._version import __version__
 #  @author Daniel McCoy Stephenson
 #  @since February 3rd, 2022
 class Graphik:
-    def __init__(self):
-        displayWidth = 900
-        displayHeight = 600
-        self.gameDisplay = pygame.display.set_mode((displayWidth, displayHeight))
+    # Color constants, reachable as Graphik.white or instance.white, etc.
+    black = (0, 0, 0)
+    white = (255, 255, 255)
+    red = (200, 0, 0)
+    green = (0, 200, 0)
+    blue = (0, 0, 200)
 
-        self.black = (0,0,0)
-        self.white = (255,255,255)
-        self.red = (200,0,0)
-        self.green = (0,200,0)
-        self.blue = (0,0,200)
-
-    def __init__(self, gameDisplay):
+    def __init__(self, gameDisplay=None):
+        # Consumers normally pass their own gameDisplay-backed surface. When
+        # none is supplied, fall back to a default 900x600 window so the
+        # no-argument Graphik() form works instead of raising.
+        if gameDisplay is None:
+            displayWidth = 900
+            displayHeight = 600
+            gameDisplay = pygame.display.set_mode((displayWidth, displayHeight))
         self.gameDisplay = gameDisplay
 
     def getGameDisplay(self):
