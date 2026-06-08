@@ -1,0 +1,34 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "graphik"
+dynamic = ["version"]
+description = "Simple helper methods for graphics programming with pygame."
+readme = "README.md"
+requires-python = ">=3.8"
+license = { text = "MIT" }
+authors = [{ name = "Daniel McCoy Stephenson" }]
+dependencies = ["pygame"]
+classifiers = [
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Topic :: Multimedia :: Graphics",
+]
+
+[project.urls]
+Homepage = "https://github.com/Stephenson-Software/graphik"
+
+[tool.setuptools]
+package-dir = { "" = "src/main/python" }
+
+[tool.setuptools.packages.find]
+where = ["src/main/python"]
+
+[tool.setuptools.dynamic]
+version = { attr = "preponderous.graphik._version.__version__" }
+
+[tool.pytest.ini_options]
+testpaths = ["src/test/python"]
+pythonpath = ["src/main/python"]
