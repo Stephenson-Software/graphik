@@ -13,9 +13,10 @@ _SRC_MAIN = os.path.normpath(
 )
 
 
-def _make_graphik():
+def _make_graphik(size=(10, 10)):
     pygame.display.init()
-    display = pygame.display.set_mode((10, 10))
+    pygame.font.init()
+    display = pygame.display.set_mode(size)
     return Graphik(display)
 
 
@@ -105,3 +106,75 @@ def test_draw_image_missing_file_raises(tmp_path):
     missing = tmp_path / "does_not_exist.bmp"
     with pytest.raises((FileNotFoundError, pygame.error)):
         graphik.drawImage(str(missing), 0, 0, 10, 10)
+
+
+def test_draw_rectangle_fills_expected_region_with_color():
+    graphik = _make_graphik()
+    display = graphik.getGameDisplay()
+    display.fill(Graphik.black)
+
+    graphik.drawRectangle(2, 2, 5, 5, Graphik.red)
+
+    # Inside the drawn 5x5 region at (2,2)-(7,7).
+    assert tuple(display.get_at((4, 4)))[:3] == Graphik.red
+    # Outside it, the background is untouched.
+    assert tuple(display.get_at((8, 8)))[:3] == Graphik.black
+
+
+def test_draw_text_blits_non_background_pixels():
+    graphik = _make_graphik()
+    display = graphik.getGameDisplay()
+    display.fill(Graphik.black)
+
+    graphik.drawText("A", 5, 5, 12, Graphik.white)
+
+    changed = any(
+        tuple(display.get_at((x, y)))[:3] != Graphik.black
+        for x in range(display.get_width())
+        for y in range(display.get_height())
+    )
+    assert changed
+
+
+def test_draw_button_draws_box_with_given_color():
+    graphik = _make_graphik((40, 40))
+    display = graphik.getGameDisplay()
+    display.fill(Graphik.black)
+
+    graphik.drawButton(10, 10, 20, 20, Graphik.blue, Graphik.white, 10, "Go", lambda: None)
+
+    # A corner of the box, away from the centered text, keeps the box color.
+    assert tuple(display.get_at((11, 11)))[:3] == Graphik.blue
+
+
+def test_draw_button_invokes_callback_when_clicked_inside(monkeypatch):
+    graphik = _make_graphik((40, 40))
+    calls = []
+    monkeypatch.setattr(pygame.mouse, "get_pos", lambda: (15, 15))
+    monkeypatch.setattr(pygame.mouse, "get_pressed", lambda: (1, 0, 0))
+
+    graphik.drawButton(10, 10, 20, 20, Graphik.blue, Graphik.white, 10, "Go", lambda: calls.append(True))
+
+    assert calls == [True]
+
+
+def test_draw_button_does_not_invoke_callback_outside_box(monkeypatch):
+    graphik = _make_graphik((40, 40))
+    calls = []
+    monkeypatch.setattr(pygame.mouse, "get_pos", lambda: (0, 0))
+    monkeypatch.setattr(pygame.mouse, "get_pressed", lambda: (1, 0, 0))
+
+    graphik.drawButton(10, 10, 20, 20, Graphik.blue, Graphik.white, 10, "Go", lambda: calls.append(True))
+
+    assert calls == []
+
+
+def test_draw_button_does_not_invoke_callback_when_not_pressed(monkeypatch):
+    graphik = _make_graphik((40, 40))
+    calls = []
+    monkeypatch.setattr(pygame.mouse, "get_pos", lambda: (15, 15))
+    monkeypatch.setattr(pygame.mouse, "get_pressed", lambda: (0, 0, 0))
+
+    graphik.drawButton(10, 10, 20, 20, Graphik.blue, Graphik.white, 10, "Go", lambda: calls.append(True))
+
+    assert calls == []
