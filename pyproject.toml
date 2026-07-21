@@ -17,6 +17,9 @@ classifiers = [
     "Topic :: Multimedia :: Graphics",
 ]
 
+[project.optional-dependencies]
+test = ["pytest"]
+
 [project.urls]
 Homepage = "https://github.com/Stephenson-Software/graphik"
 
