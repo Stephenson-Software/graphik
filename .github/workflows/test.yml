@@ -21,7 +21,11 @@ jobs:
 
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.x"
+          # Pinned rather than "3.x": pygame only ships prebuilt wheels up to
+          # cp313 (see https://pypi.org/project/pygame/#files), and installing
+          # on a newer interpreter forces a from-source build that fails on
+          # the runner (missing SDL/freetype dev headers).
+          python-version: "3.13"
 
       - name: Install package with test dependencies
         run: python -m pip install --upgrade pip && python -m pip install -e .[test]
