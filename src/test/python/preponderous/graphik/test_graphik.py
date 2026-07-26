@@ -141,6 +141,89 @@ def test_draw_text_blits_non_background_pixels():
     assert changed
 
 
+def _count_font_constructions(monkeypatch):
+    # Wrap pygame.font.Font so tests can observe how often it is built.
+    constructed = []
+    realFont = pygame.font.Font
+
+    def counting_font(*args, **kwargs):
+        constructed.append(args)
+        return realFont(*args, **kwargs)
+
+    monkeypatch.setattr(pygame.font, "Font", counting_font)
+    return constructed
+
+
+def test_draw_text_reuses_one_font_across_calls_at_the_same_size(monkeypatch):
+    graphik = _make_graphik()
+    constructed = _count_font_constructions(monkeypatch)
+
+    for _ in range(5):
+        graphik.drawText("A", 5, 5, 12, Graphik.white)
+
+    assert len(constructed) == 1
+
+
+def test_draw_text_builds_a_separate_font_per_size(monkeypatch):
+    graphik = _make_graphik()
+    constructed = _count_font_constructions(monkeypatch)
+
+    graphik.drawText("A", 5, 5, 12, Graphik.white)
+    graphik.drawText("A", 5, 5, 14, Graphik.white)
+    graphik.drawText("A", 5, 5, 12, Graphik.white)
+
+    # One font per distinct size, and the repeat of size 12 reuses the first.
+    assert [args[1] for args in constructed] == [12, 14]
+
+
+def test_draw_text_initializes_font_module_when_only_display_was_initialized():
+    # The constructor only sets up a display, so a consumer can reasonably
+    # reach drawText without ever calling pygame.font.init() themselves.
+    pygame.display.init()
+    display = pygame.display.set_mode((20, 20))
+    graphik = Graphik(display)
+    pygame.font.quit()
+    assert not pygame.font.get_init()
+
+    graphik.drawText("A", 10, 10, 12, Graphik.white)
+
+    assert pygame.font.get_init()
+
+
+def test_draw_text_rebuilds_cached_font_after_the_font_module_shuts_down(monkeypatch):
+    # A Font built before the font module went down is freed memory, so the
+    # cache must be dropped rather than reused when drawText restarts it.
+    graphik = _make_graphik()
+    graphik.drawText("A", 5, 5, 12, Graphik.white)
+
+    pygame.font.quit()
+
+    constructed = _count_font_constructions(monkeypatch)
+    graphik.drawText("A", 5, 5, 12, Graphik.white)
+
+    assert len(constructed) == 1
+
+
+def test_draw_text_drops_cached_font_when_the_display_session_changes(monkeypatch):
+    # Restarting pygame invalidates the cached font too, but leaves the font
+    # module initialized, so the check above cannot catch it on its own.
+    graphik = _make_graphik()
+    graphik.drawText("A", 5, 5, 12, Graphik.white)
+
+    pygame.quit()
+    pygame.init()
+    pygame.display.set_mode((20, 20))
+
+    constructed = _count_font_constructions(monkeypatch)
+    # The instance still holds the old display surface, so this fails the same
+    # loud way it did before fonts were cached -- rather than the stale font
+    # segfaulting first.
+    with pytest.raises(pygame.error):
+        graphik.drawText("A", 5, 5, 12, Graphik.white)
+
+    assert len(constructed) == 1
+
+
 def test_draw_button_draws_box_with_given_color():
     graphik = _make_graphik((40, 40))
     display = graphik.getGameDisplay()

@@ -22,6 +22,10 @@ class Graphik:
             displayHeight = 600
             gameDisplay = pygame.display.set_mode((displayWidth, displayHeight))
         self.gameDisplay = gameDisplay
+        # Fonts cached by size, plus the display surface they were built
+        # against. See _getFont for why both are needed.
+        self._fonts = {}
+        self._fontDisplay = None
 
     def getGameDisplay(self):
         return self.gameDisplay
@@ -32,8 +36,40 @@ class Graphik:
     def drawRectangle(self, xpos, ypos, width, height, color):
         pygame.draw.rect(self.gameDisplay, color, [xpos, ypos, width, height])
 
+    def _getFont(self, size):
+        # Building a Font parses and rasterizes the TrueType file, which costs
+        # far more than the render() it exists to serve, so keep one per size
+        # instead of rebuilding it on every frame's drawText.
+        if not pygame.font.get_init():
+            # The constructor only sets up a display, so a consumer can reach
+            # here having never initialized the font module; bring it up rather
+            # than failing with a bare "font not initialized". Anything already
+            # cached belongs to the previous font session (see below).
+            pygame.font.init()
+            self._fonts.clear()
+
+        # A Font that outlives a font.quit()/init() cycle points at freed
+        # SDL_ttf memory and segfaults when used, and pygame offers no way to
+        # test a Font for validity. Restarting pygame drops the display
+        # surface, so treat a change of that object as a new session and
+        # rebuild. (A resize returns the same surface, so this does not
+        # discard the cache on every set_mode.)
+        #
+        # Not covered: a consumer that calls pygame.font.quit() followed by
+        # pygame.font.init() itself, leaving the display alone -- pygame
+        # exposes nothing that distinguishes that from an untouched module.
+        # Build a new Graphik after restarting the font module that way.
+        display = pygame.display.get_surface()
+        if display is not self._fontDisplay:
+            self._fonts.clear()
+            self._fontDisplay = display
+
+        if size not in self._fonts:
+            self._fonts[size] = pygame.font.Font('freesansbold.ttf', size)
+        return self._fonts[size]
+
     def drawText(self, text, xpos, ypos, size, color):
-        myFont = pygame.font.Font('freesansbold.ttf', size)
+        myFont = self._getFont(size)
         textSurface = myFont.render(text, True, color)
         textRectangle = textSurface.get_rect()
         textRectangle.center = ((xpos, ypos))
