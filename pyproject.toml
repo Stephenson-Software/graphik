@@ -7,7 +7,7 @@ name = "graphik"
 dynamic = ["version"]
 description = "Simple helper methods for graphics programming with pygame."
 readme = "README.md"
-requires-python = ">=3.8"
+requires-python = ">=3.9"
 license = { text = "MIT" }
 authors = [{ name = "Daniel McCoy Stephenson" }]
 dependencies = ["pygame"]
