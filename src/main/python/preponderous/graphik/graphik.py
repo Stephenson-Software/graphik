@@ -76,6 +76,13 @@ class Graphik:
         self.gameDisplay.blit(textSurface, textRectangle)
 
     def drawButton(self, xpos, ypos, width, height, colorBox, colorText, sizeText, text, function):
+        # Polls the current mouse state rather than tracking press/release
+        # edges, so function() fires on every call where the mouse is held
+        # inside the button with button 1 down -- once per call, not once
+        # per click. Deliberately left this way: the vendored copies in
+        # Roam/Apex/Ophidian/Patchwork/Tic-Tak-Toe are written against this
+        # repeat-fire behavior. Callers wanting once-per-click semantics
+        # must debounce on their side.
         self.drawRectangle(xpos, ypos, width, height, colorBox)
         self.drawText(text, xpos + (width//2), ypos + (height//2), sizeText, colorText)
         

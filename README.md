@@ -27,13 +27,22 @@ Public `Graphik` methods:
 - `getVersion()` — returns the installed graphik version string.
 - `drawRectangle(xpos, ypos, width, height, color)`
 - `drawText(text, xpos, ypos, size, color)`
-- `drawButton(xpos, ypos, width, height, colorBox, colorText, sizeText, text, function)` — draws a rectangle and centered text, and calls `function()` on click.
+- `drawButton(xpos, ypos, width, height, colorBox, colorText, sizeText, text, function)` — draws a rectangle and centered text, and calls `function()` on every call where the mouse is held inside the button with button 1 down (there is no click-edge detection, so a held-down mouse fires `function()` once per call, not once per click). Callers wanting once-per-click semantics must debounce on their side.
 - `drawImage(filePath, xpos, ypos, width, height)`
 
 Color constants: `Graphik.black`, `Graphik.white`, `Graphik.red`, `Graphik.green`, `Graphik.blue`.
 
 ## Dependencies
 - pygame
+
+## Development
+```bash
+python -m venv .venv
+source .venv/bin/activate
+pip install -e ".[test]"
+pytest
+```
+The suite is headless: `src/test/python/conftest.py` sets `SDL_VIDEODRIVER`/`SDL_AUDIODRIVER` to `dummy` before pygame touches a display, so no window is created and the tests run on a machine with no display attached. `pytest` alone works from the repo root because `[tool.pytest.ini_options]` in `pyproject.toml` points `testpaths` at `src/test/python` and `pythonpath` at `src/main/python`. `.github/workflows/test.yml` runs the same `pip install -e ".[test]"` + `pytest` sequence on every push and pull request.
 
 ## Projects
 [Projects that utilize this library](https://github.com/Stephenson-Software/graphik/wiki/Projects)
