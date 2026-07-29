@@ -254,3 +254,19 @@ def test_draw_button_invokes_callback_only_on_inside_click(
     graphik.drawButton(10, 10, 20, 20, Graphik.blue, Graphik.white, 10, "Go", lambda: calls.append(True))
 
     assert calls == ([True] if expect_call else [])
+
+
+def test_draw_button_fires_callback_once_per_call_while_mouse_held(monkeypatch):
+    # Pins the documented repeat-fire behavior: there is no click-edge
+    # detection, so a held-down mouse inside the button fires the callback
+    # on every call, not once per click.
+    graphik = _make_graphik((40, 40))
+    calls = []
+    monkeypatch.setattr(pygame.mouse, "get_pos", lambda: (15, 15))
+    monkeypatch.setattr(pygame.mouse, "get_pressed", lambda: (1, 0, 0))
+
+    held_down_frames = 5
+    for _ in range(held_down_frames):
+        graphik.drawButton(10, 10, 20, 20, Graphik.blue, Graphik.white, 10, "Go", lambda: calls.append(True))
+
+    assert len(calls) == held_down_frames
