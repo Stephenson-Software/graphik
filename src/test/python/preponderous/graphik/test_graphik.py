@@ -108,6 +108,90 @@ def test_draw_image_missing_file_raises(tmp_path):
         graphik.drawImage(str(missing), 0, 0, 10, 10)
 
 
+def _count_image_loads(monkeypatch):
+    # Wrap pygame.image.load so tests can observe how often it is called.
+    loaded = []
+    realLoad = pygame.image.load
+
+    def counting_load(*args, **kwargs):
+        loaded.append(args)
+        return realLoad(*args, **kwargs)
+
+    monkeypatch.setattr(pygame.image, "load", counting_load)
+    return loaded
+
+
+def _count_image_scales(monkeypatch):
+    # Wrap pygame.transform.scale so tests can observe how often it is called.
+    scaled = []
+    realScale = pygame.transform.scale
+
+    def counting_scale(*args, **kwargs):
+        scaled.append(args)
+        return realScale(*args, **kwargs)
+
+    monkeypatch.setattr(pygame.transform, "scale", counting_scale)
+    return scaled
+
+
+def test_draw_image_reuses_loaded_surface_across_calls(monkeypatch, tmp_path):
+    graphik = _make_graphik()
+    image_path = tmp_path / "red.bmp"
+    _write_solid_image(image_path, (255, 0, 0))
+
+    loaded = _count_image_loads(monkeypatch)
+
+    for _ in range(5):
+        graphik.drawImage(str(image_path), 0, 0, 10, 10)
+
+    assert len(loaded) == 1
+
+
+def test_draw_image_reuses_scaled_surface_for_the_same_size(monkeypatch, tmp_path):
+    graphik = _make_graphik()
+    image_path = tmp_path / "red.bmp"
+    _write_solid_image(image_path, (255, 0, 0))
+
+    scaled = _count_image_scales(monkeypatch)
+
+    for _ in range(5):
+        graphik.drawImage(str(image_path), 0, 0, 10, 10)
+
+    assert len(scaled) == 1
+
+
+def test_draw_image_rescales_when_size_changes(monkeypatch, tmp_path):
+    graphik = _make_graphik()
+    image_path = tmp_path / "red.bmp"
+    _write_solid_image(image_path, (255, 0, 0))
+
+    scaled = _count_image_scales(monkeypatch)
+
+    graphik.drawImage(str(image_path), 0, 0, 10, 10)
+    graphik.drawImage(str(image_path), 0, 0, 12, 12)
+    graphik.drawImage(str(image_path), 0, 0, 10, 10)
+
+    # One scale per distinct size requested, in request order.
+    assert [args[1] for args in scaled] == [(10, 10), (12, 12), (10, 10)]
+
+
+def test_draw_image_still_blits_correctly_after_caching(tmp_path):
+    pygame.display.init()
+    display = pygame.display.set_mode((20, 20))
+    display.fill((0, 0, 0))
+    graphik = Graphik(display)
+
+    image_path = tmp_path / "red.bmp"
+    _write_solid_image(image_path, (255, 0, 0))
+
+    graphik.drawImage(str(image_path), 0, 0, 10, 10)
+    display.fill((0, 0, 0))
+    graphik.drawImage(str(image_path), 0, 0, 10, 10)
+
+    assert tuple(display.get_at((5, 5)))[:3] == (255, 0, 0)
+    assert tuple(display.get_at((15, 15)))[:3] == (0, 0, 0)
+
+
 def _rgb(display, pos):
     return tuple(display.get_at(pos))[:3]
 

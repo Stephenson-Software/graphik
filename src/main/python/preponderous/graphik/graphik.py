@@ -26,6 +26,11 @@ class Graphik:
         # against. See _getFont for why both are needed.
         self._fonts = {}
         self._fontDisplay = None
+        # Images cached by file path: the loaded (unscaled) surface, plus the
+        # most recent (size, scaled surface) pair. See drawImage for why this
+        # doesn't need the font cache's session-invalidation logic.
+        self._images = {}
+        self._scaledImages = {}
 
     def getGameDisplay(self):
         return self.gameDisplay
@@ -94,6 +99,27 @@ class Graphik:
                 function()
 
     def drawImage(self, filePath, xpos, ypos, width, height):
-        image = pygame.image.load(filePath)
-        image = pygame.transform.scale(image, (width, height))
-        self.gameDisplay.blit(image, (xpos, ypos))
+        # Loading decodes the file from disk and scaling resamples it, both of
+        # which cost far more than the blit() they exist to serve, so cache
+        # both by filePath instead of redoing them every call. Unlike
+        # _getFont's Font objects, a surface from pygame.image.load survives a
+        # pygame.quit()/init() cycle (verified empirically), so this cache
+        # does not need the font cache's display-session invalidation.
+        #
+        # A failed load caches nothing, so a missing path keeps raising on
+        # every call. Keying on path also means an asset edited on disk
+        # mid-run will not be picked up -- the normal tradeoff for a game
+        # asset cache.
+        if filePath not in self._images:
+            self._images[filePath] = pygame.image.load(filePath)
+        image = self._images[filePath]
+
+        size = (width, height)
+        cachedSize, cachedScaled = self._scaledImages.get(filePath, (None, None))
+        if cachedSize == size:
+            scaledImage = cachedScaled
+        else:
+            scaledImage = pygame.transform.scale(image, size)
+            self._scaledImages[filePath] = (size, scaledImage)
+
+        self.gameDisplay.blit(scaledImage, (xpos, ypos))

@@ -28,7 +28,7 @@ Public `Graphik` methods:
 - `drawRectangle(xpos, ypos, width, height, color)`
 - `drawText(text, xpos, ypos, size, color)`
 - `drawButton(xpos, ypos, width, height, colorBox, colorText, sizeText, text, function)` — draws a rectangle and centered text, and calls `function()` on every call where the mouse is held inside the button with button 1 down (there is no click-edge detection, so a held-down mouse fires `function()` once per call, not once per click). Callers wanting once-per-click semantics must debounce on their side.
-- `drawImage(filePath, xpos, ypos, width, height)`
+- `drawImage(filePath, xpos, ypos, width, height)` — caches the loaded and scaled surface by `filePath`, so an image edited on disk mid-run will not be picked up until the process restarts.
 
 Color constants: `Graphik.black`, `Graphik.white`, `Graphik.red`, `Graphik.green`, `Graphik.blue`.
 
