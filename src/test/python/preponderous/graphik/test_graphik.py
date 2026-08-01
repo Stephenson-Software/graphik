@@ -175,6 +175,26 @@ def test_draw_image_rescales_when_size_changes(monkeypatch, tmp_path):
     assert [args[1] for args in scaled] == [(10, 10), (12, 12), (10, 10)]
 
 
+def test_draw_image_converts_loaded_surface_for_faster_blits(monkeypatch, tmp_path):
+    # pygame.Surface is a builtin type (its methods can't be monkeypatched),
+    # so observe the conversion through the surface actually handed to
+    # transform.scale rather than spying on convert_alpha() directly.
+    graphik = _make_graphik()
+    image_path = tmp_path / "red.bmp"
+    _write_solid_image(image_path, (255, 0, 0))
+
+    rawImage = pygame.image.load(str(image_path))
+    scaled = _count_image_scales(monkeypatch)
+
+    graphik.drawImage(str(image_path), 0, 0, 10, 10)
+
+    sourcePassedToScale = scaled[0][0]
+    # convert_alpha() adds a per-pixel alpha channel that a plain BMP load
+    # does not have; its presence proves the cached surface was converted.
+    assert not rawImage.get_flags() & pygame.SRCALPHA
+    assert sourcePassedToScale.get_flags() & pygame.SRCALPHA
+
+
 def test_draw_image_still_blits_correctly_after_caching(tmp_path):
     pygame.display.init()
     display = pygame.display.set_mode((20, 20))
