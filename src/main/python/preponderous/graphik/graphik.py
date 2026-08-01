@@ -111,7 +111,13 @@ class Graphik:
         # mid-run will not be picked up -- the normal tradeoff for a game
         # asset cache.
         if filePath not in self._images:
-            self._images[filePath] = pygame.image.load(filePath)
+            # convert_alpha() rebuilds the surface in the display's pixel
+            # format (and preserves any per-pixel alpha), which is what makes
+            # repeated blit() calls fast -- an unconverted surface is
+            # reformatted on every single blit. Doing it once here, alongside
+            # the load, keeps that cost out of the per-frame path this cache
+            # exists to protect.
+            self._images[filePath] = pygame.image.load(filePath).convert_alpha()
         image = self._images[filePath]
 
         size = (width, height)
