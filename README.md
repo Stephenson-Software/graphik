@@ -1,4 +1,6 @@
 # Graphik
+[![Test](https://github.com/Stephenson-Software/graphik/actions/workflows/test.yml/badge.svg)](https://github.com/Stephenson-Software/graphik/actions/workflows/test.yml)
+
 This library assists developers with graphics programming.
 
 ## Installation
