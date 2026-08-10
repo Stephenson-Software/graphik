@@ -393,6 +393,72 @@ def test_draw_button_invokes_callback_only_on_inside_click(
     assert calls == ([True] if expect_call else [])
 
 
+def _click_at(monkeypatch, graphik, pos, box=(10, 10, 20, 20)):
+    # Draw one button and report whether a press at `pos` reached the callback.
+    calls = []
+    monkeypatch.setattr(pygame.mouse, "get_pos", lambda: pos)
+    monkeypatch.setattr(pygame.mouse, "get_pressed", lambda: (1, 0, 0))
+    xpos, ypos, width, height = box
+    graphik.drawButton(
+        xpos, ypos, width, height, Graphik.blue, Graphik.white, 10, "Go", lambda: calls.append(True)
+    )
+    return bool(calls)
+
+
+@pytest.mark.parametrize(
+    "pos, expect_call",
+    [
+        # The box drawn at (10,10) 20x20 covers pixels 10..29 on both axes, so
+        # every one of its four edges must be clickable...
+        pytest.param((10, 15), True, id="left_edge"),
+        pytest.param((15, 10), True, id="top_edge"),
+        pytest.param((29, 15), True, id="right_edge"),
+        pytest.param((15, 29), True, id="bottom_edge"),
+        pytest.param((10, 10), True, id="top_left_corner"),
+        # ...and nothing outside that region may be, including the first
+        # coordinate past the far edge, which is not painted.
+        pytest.param((9, 15), False, id="just_left_of_box"),
+        pytest.param((15, 9), False, id="just_above_box"),
+        pytest.param((30, 15), False, id="just_right_of_box"),
+        pytest.param((15, 30), False, id="just_below_box"),
+    ],
+)
+def test_draw_button_clickable_region_matches_the_drawn_box(monkeypatch, pos, expect_call):
+    # Regression guard: the hit test used strict inequalities on both axes, which
+    # left the painted left and top edge lines dead while the right and bottom
+    # ones worked. The clickable region must be exactly the drawn region.
+    graphik = _make_graphik((40, 40))
+    assert _click_at(monkeypatch, graphik, pos) == expect_call
+
+
+def test_draw_button_edges_are_painted_where_they_are_clickable():
+    # Anchors the test above to what is actually drawn, so the two cannot drift:
+    # the edge pixels asserted clickable are the same ones filled with colorBox.
+    graphik = _make_graphik((40, 40))
+    display = graphik.getGameDisplay()
+    display.fill(Graphik.black)
+
+    graphik.drawButton(10, 10, 20, 20, Graphik.blue, Graphik.white, 10, "Go", lambda: None)
+
+    assert _rgb(display, (10, 15)) == Graphik.blue
+    assert _rgb(display, (15, 10)) == Graphik.blue
+    assert _rgb(display, (29, 15)) == Graphik.blue
+    assert _rgb(display, (15, 29)) == Graphik.blue
+    # One past the far edge is outside the fill, matching the half-open bounds.
+    assert _rgb(display, (30, 15)) == Graphik.black
+    assert _rgb(display, (15, 30)) == Graphik.black
+
+
+def test_adjacent_buttons_do_not_share_a_clickable_boundary(monkeypatch):
+    # With half-open bounds a shared boundary belongs to exactly one button, so
+    # stacking buttons edge to edge cannot fire both callbacks from one press.
+    graphik = _make_graphik((60, 40))
+    left = _click_at(monkeypatch, graphik, (30, 15), box=(10, 10, 20, 20))
+    right = _click_at(monkeypatch, graphik, (30, 15), box=(30, 10, 20, 20))
+
+    assert (left, right) == (False, True)
+
+
 def test_draw_button_fires_callback_once_per_call_while_mouse_held(monkeypatch):
     # Pins the documented repeat-fire behavior: there is no click-edge
     # detection, so a held-down mouse inside the button fires the callback
