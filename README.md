@@ -34,8 +34,8 @@ Public `Graphik` methods:
 - `Graphik(gameDisplay=None)` — construct a helper bound to a pygame display surface (creates a default 900x600 window if none is given).
 - `getGameDisplay()` — returns the bound display surface.
 - `getVersion()` — returns the installed graphik version string.
-- `drawRectangle(xpos, ypos, width, height, color)`
-- `drawText(text, xpos, ypos, size, color)`
+- `drawRectangle(xpos, ypos, width, height, color)` — `xpos`/`ypos` are the rectangle's top-left corner.
+- `drawText(text, xpos, ypos, size, color)` — `xpos`/`ypos` are the **center** of the rendered text, not its top-left corner. This differs from `drawRectangle`, `drawButton` and `drawImage`, which all position their top-left corner at the given coordinates.
 - `drawButton(xpos, ypos, width, height, colorBox, colorText, sizeText, text, function)` — draws a rectangle and centered text, and calls `function()` on every call where the mouse is held inside the button with button 1 down (there is no click-edge detection, so a held-down mouse fires `function()` once per call, not once per click). Callers wanting once-per-click semantics must debounce on their side.
 - `drawImage(filePath, xpos, ypos, width, height)` — caches the loaded and scaled surface by `filePath`, so an image edited on disk mid-run will not be picked up until the process restarts.
 
