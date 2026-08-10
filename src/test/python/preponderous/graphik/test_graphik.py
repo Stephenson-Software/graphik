@@ -245,6 +245,39 @@ def test_draw_text_blits_non_background_pixels():
     assert changed
 
 
+def test_draw_text_centers_the_text_on_the_given_position():
+    # Pins the documented anchoring: drawText centers on (xpos, ypos), unlike
+    # drawRectangle/drawButton/drawImage, which put their top-left corner there.
+    graphik = _make_graphik((200, 100))
+    display = graphik.getGameDisplay()
+    display.fill(Graphik.black)
+
+    xpos, ypos = 100, 50
+    graphik.drawText("WWWW", xpos, ypos, 20, Graphik.white)
+
+    width, height = display.get_size()
+    inked = [
+        (x, y)
+        for x in range(width)
+        for y in range(height)
+        if _rgb(display, (x, y)) != Graphik.black
+    ]
+    assert inked, "drawText left the surface untouched"
+
+    xs = [x for x, _ in inked]
+    ys = [y for _, y in inked]
+
+    # The ink straddles the requested point on all four sides -- a top-left
+    # anchor could never place ink above or to the left of it.
+    assert min(xs) < xpos < max(xs)
+    assert min(ys) < ypos < max(ys)
+    # And it is centered there, not merely overlapping it. Only the horizontal
+    # midpoint is asserted tightly: glyph ink is vertically asymmetric within
+    # the rendered rect (capital letters sit above the baseline), so the
+    # vertical ink midpoint is offset from the rect center that is centered.
+    assert abs((min(xs) + max(xs)) / 2 - xpos) <= 1
+
+
 def _count_font_constructions(monkeypatch):
     # Wrap pygame.font.Font so tests can observe how often it is built.
     constructed = []

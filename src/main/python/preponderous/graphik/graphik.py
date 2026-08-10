@@ -6,6 +6,27 @@ from ._version import __version__
 #  @author Daniel McCoy Stephenson
 #  @since February 3rd, 2022
 class Graphik:
+    """Helper methods for drawing to a pygame display surface.
+
+    Every draw method renders to the surface the instance was constructed
+    with, reachable through getGameDisplay(). Coordinates are in pixels and
+    measured from the top-left of that surface, and colors are ``(r, g, b)``
+    tuples -- the constants below cover the common cases.
+
+    Anchoring is not uniform across the draw methods: drawRectangle,
+    drawButton and drawImage position their top-left corner at the given
+    ``(xpos, ypos)``, while drawText centers the rendered text on it.
+
+    Example::
+
+        import pygame
+        from preponderous.graphik import Graphik
+
+        pygame.init()
+        graphik = Graphik(pygame.display.set_mode((900, 600)))
+        graphik.drawRectangle(100, 100, 200, 50, Graphik.blue)
+    """
+
     # Color constants, reachable as Graphik.white or instance.white, etc.
     black = (0, 0, 0)
     white = (255, 255, 255)
@@ -14,6 +35,14 @@ class Graphik:
     blue = (0, 0, 200)
 
     def __init__(self, gameDisplay=None):
+        """Bind a Graphik to the surface it draws on.
+
+        Args:
+            gameDisplay: The pygame surface every draw method renders to,
+                normally the one returned by ``pygame.display.set_mode``.
+                When omitted, a default 900x600 display is created, which
+                opens a window as a side effect.
+        """
         # Consumers normally pass their own gameDisplay-backed surface. When
         # none is supplied, fall back to a default 900x600 window so the
         # no-argument Graphik() form works instead of raising.
@@ -33,12 +62,27 @@ class Graphik:
         self._scaledImages = {}
 
     def getGameDisplay(self):
+        """Return the pygame surface this instance draws to."""
         return self.gameDisplay
 
     def getVersion(self):
+        """Return the installed graphik version string.
+
+        This is the same value as ``preponderous.graphik.__version__``, which
+        is reachable without constructing a Graphik (and so without a display).
+        """
         return __version__
 
     def drawRectangle(self, xpos, ypos, width, height, color):
+        """Fill a rectangle on the display.
+
+        Args:
+            xpos: X coordinate of the rectangle's left edge, in pixels.
+            ypos: Y coordinate of the rectangle's top edge, in pixels.
+            width: Width of the rectangle, in pixels.
+            height: Height of the rectangle, in pixels.
+            color: Fill color as an ``(r, g, b)`` tuple.
+        """
         pygame.draw.rect(self.gameDisplay, color, [xpos, ypos, width, height])
 
     def _getFont(self, size):
@@ -74,6 +118,19 @@ class Graphik:
         return self._fonts[size]
 
     def drawText(self, text, xpos, ypos, size, color):
+        """Render a line of text, centered on the given position.
+
+        Note that ``(xpos, ypos)`` is the *center* of the rendered text, not
+        its top-left corner as in drawRectangle, drawButton and drawImage.
+
+        Args:
+            text: The string to render.
+            xpos: X coordinate the text is centered on, in pixels.
+            ypos: Y coordinate the text is centered on, in pixels.
+            size: Font size in points. The font module is initialized on
+                demand, and one font per distinct size is cached and reused.
+            color: Text color as an ``(r, g, b)`` tuple.
+        """
         myFont = self._getFont(size)
         textSurface = myFont.render(text, True, color)
         textRectangle = textSurface.get_rect()
@@ -81,6 +138,24 @@ class Graphik:
         self.gameDisplay.blit(textSurface, textRectangle)
 
     def drawButton(self, xpos, ypos, width, height, colorBox, colorText, sizeText, text, function):
+        """Draw a labelled box and call ``function`` while it is being clicked.
+
+        ``function()`` is called on every invocation where the mouse sits
+        inside the box with button 1 held down -- once per call, not once per
+        click. A caller wanting once-per-click semantics must debounce on its
+        own side; see the implementation note below for why.
+
+        Args:
+            xpos: X coordinate of the box's left edge, in pixels.
+            ypos: Y coordinate of the box's top edge, in pixels.
+            width: Width of the box, in pixels.
+            height: Height of the box, in pixels.
+            colorBox: Fill color of the box as an ``(r, g, b)`` tuple.
+            colorText: Color of the label as an ``(r, g, b)`` tuple.
+            sizeText: Font size of the label, in points.
+            text: The label, centered within the box.
+            function: Zero-argument callable invoked as described above.
+        """
         # Polls the current mouse state rather than tracking press/release
         # edges, so function() fires on every call where the mouse is held
         # inside the button with button 1 down -- once per call, not once
@@ -99,6 +174,24 @@ class Graphik:
                 function()
 
     def drawImage(self, filePath, xpos, ypos, width, height):
+        """Draw an image file, scaled to the given size.
+
+        The loaded and scaled surfaces are cached against ``filePath``, so an
+        asset edited on disk mid-run is not picked up until the process
+        restarts. A path that fails to load caches nothing and raises on every
+        call.
+
+        Args:
+            filePath: Path to the image file, used as the cache key.
+            xpos: X coordinate of the image's left edge, in pixels.
+            ypos: Y coordinate of the image's top edge, in pixels.
+            width: Width to scale the image to, in pixels.
+            height: Height to scale the image to, in pixels.
+
+        Raises:
+            FileNotFoundError: If no file exists at ``filePath``.
+            pygame.error: If the file exists but pygame cannot decode it.
+        """
         # Loading decodes the file from disk and scaling resamples it, both of
         # which cost far more than the blit() they exist to serve, so cache
         # both by filePath instead of redoing them every call. Unlike
