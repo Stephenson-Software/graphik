@@ -145,6 +145,12 @@ class Graphik:
         click. A caller wanting once-per-click semantics must debounce on its
         own side; see the implementation note below for why.
 
+        The clickable region is exactly the region the box is drawn over:
+        ``xpos`` through ``xpos + width - 1`` horizontally, and ``ypos``
+        through ``ypos + height - 1`` vertically. Buttons laid out edge to
+        edge therefore share no clickable coordinate -- a boundary belongs to
+        the button whose left/top edge sits on it.
+
         Args:
             xpos: X coordinate of the box's left edge, in pixels.
             ypos: Y coordinate of the box's top edge, in pixels.
@@ -168,7 +174,12 @@ class Graphik:
         
         # if clicked then do function
         mouse = pygame.mouse.get_pos()
-        if (xpos + width > mouse[0] > xpos and ypos + height > mouse[1] > ypos):
+        # Half-open on both axes, matching the range pygame.draw.rect fills, so
+        # the clickable region is exactly the drawn one. A strict `> xpos` here
+        # would leave the painted left and top edge columns unclickable, and a
+        # closed `<= xpos + width` would let edge-to-edge buttons both claim
+        # their shared boundary.
+        if (xpos <= mouse[0] < xpos + width and ypos <= mouse[1] < ypos + height):
             click = pygame.mouse.get_pressed()
             if click[0] == 1:
                 function()
