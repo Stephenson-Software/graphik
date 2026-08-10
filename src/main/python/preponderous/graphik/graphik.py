@@ -17,12 +17,14 @@ class Graphik:
     drawButton and drawImage position their top-left corner at the given
     ``(xpos, ypos)``, while drawText centers the rendered text on it.
 
-    Example:
-        >>> import pygame
-        >>> from preponderous.graphik import Graphik
-        >>> pygame.init()
-        >>> graphik = Graphik(pygame.display.set_mode((900, 600)))
-        >>> graphik.drawRectangle(100, 100, 200, 50, Graphik.blue)
+    Example::
+
+        import pygame
+        from preponderous.graphik import Graphik
+
+        pygame.init()
+        graphik = Graphik(pygame.display.set_mode((900, 600)))
+        graphik.drawRectangle(100, 100, 200, 50, Graphik.blue)
     """
 
     # Color constants, reachable as Graphik.white or instance.white, etc.
@@ -119,7 +121,7 @@ class Graphik:
         """Render a line of text, centered on the given position.
 
         Note that ``(xpos, ypos)`` is the *center* of the rendered text, not
-        its top-left corner as in drawRectangle and drawImage.
+        its top-left corner as in drawRectangle, drawButton and drawImage.
 
         Args:
             text: The string to render.

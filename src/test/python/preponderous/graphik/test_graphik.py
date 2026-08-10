@@ -265,7 +265,7 @@ def test_draw_text_centers_the_text_on_the_given_position():
     assert inked, "drawText left the surface untouched"
 
     xs = [x for x, _ in inked]
-    ys = [_y for _, _y in inked]
+    ys = [y for _, y in inked]
 
     # The ink straddles the requested point on all four sides -- a top-left
     # anchor could never place ink above or to the left of it.
