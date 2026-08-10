@@ -428,7 +428,7 @@ def test_draw_button_clickable_region_matches_the_drawn_box(monkeypatch, pos, ex
     # left the painted left and top edge lines dead while the right and bottom
     # ones worked. The clickable region must be exactly the drawn region.
     graphik = _make_graphik((40, 40))
-    assert _click_at(monkeypatch, graphik, pos) is expect_call
+    assert _click_at(monkeypatch, graphik, pos) == expect_call
 
 
 def test_draw_button_edges_are_painted_where_they_are_clickable():
