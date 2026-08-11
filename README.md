@@ -44,7 +44,7 @@ Color constants: `Graphik.black`, `Graphik.white`, `Graphik.red`, `Graphik.green
 ## Dependencies
 - pygame
 
-Python 3.9 or newer is required (`requires-python` in [pyproject.toml](pyproject.toml)). The test suite is run against 3.9, 3.10, 3.11, 3.12 and 3.13 — the versions pygame ships prebuilt wheels for.
+Python 3.9 or newer is required (`requires-python` in [pyproject.toml](pyproject.toml)). The test suite is run against 3.9 through 3.13; see [`.github/workflows/test.yml`](.github/workflows/test.yml) for why 3.13 is the ceiling.
 
 ## Development
 ```bash
