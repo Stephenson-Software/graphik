@@ -44,6 +44,8 @@ Color constants: `Graphik.black`, `Graphik.white`, `Graphik.red`, `Graphik.green
 ## Dependencies
 - pygame
 
+Python 3.9 or newer is required (`requires-python` in [pyproject.toml](pyproject.toml)). The test suite is run against 3.9, 3.10, 3.11, 3.12 and 3.13 — the versions pygame ships prebuilt wheels for.
+
 ## Development
 ```bash
 python -m venv .venv
@@ -51,7 +53,7 @@ source .venv/bin/activate
 pip install -e ".[test]"
 pytest
 ```
-The suite is headless: `src/test/python/conftest.py` sets `SDL_VIDEODRIVER`/`SDL_AUDIODRIVER` to `dummy` before pygame touches a display, so no window is created and the tests run on a machine with no display attached. `pytest` alone works from the repo root because `[tool.pytest.ini_options]` in `pyproject.toml` points `testpaths` at `src/test/python` and `pythonpath` at `src/main/python`. `.github/workflows/test.yml` runs the same `pip install -e ".[test]"` + `pytest` sequence on every push and pull request.
+The suite is headless: `src/test/python/conftest.py` sets `SDL_VIDEODRIVER`/`SDL_AUDIODRIVER` to `dummy` before pygame touches a display, so no window is created and the tests run on a machine with no display attached. `pytest` alone works from the repo root because `[tool.pytest.ini_options]` in `pyproject.toml` points `testpaths` at `src/test/python` and `pythonpath` at `src/main/python`. `.github/workflows/test.yml` runs the same `pip install -e ".[test]"` + `pytest` sequence — preceded by a compile check and an import smoke test, across the supported Python versions — on every pull request and on every push to `main`. A push to a branch with no open pull request is not covered, so run `pytest` locally before opening one.
 
 ## Projects
 [Projects that utilize this library](https://github.com/Stephenson-Software/graphik/wiki/Projects)
