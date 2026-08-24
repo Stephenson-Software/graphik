@@ -44,13 +44,8 @@ def test_no_arg_constructor_creates_default_display():
     # and fall back to a default display rather than raising TypeError.
     graphik = Graphik()
     assert graphik.getGameDisplay() is not None
-
-
-def test_no_arg_constructor_uses_the_documented_default_size():
-    # The constructor docstring and the README both promise a 900x600 fallback
-    # window; the check above only establishes that *some* display was made, so
-    # the documented size could drift without any test noticing.
-    graphik = Graphik()
+    # The constructor docstring and the README both promise 900x600
+    # specifically, so pin the size and not merely the display's existence.
     assert graphik.getGameDisplay().get_size() == (900, 600)
 
 
