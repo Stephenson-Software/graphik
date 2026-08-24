@@ -44,6 +44,9 @@ def test_no_arg_constructor_creates_default_display():
     # and fall back to a default display rather than raising TypeError.
     graphik = Graphik()
     assert graphik.getGameDisplay() is not None
+    # The constructor docstring and the README both promise 900x600
+    # specifically, so pin the size and not merely the display's existence.
+    assert graphik.getGameDisplay().get_size() == (900, 600)
 
 
 def test_color_constants_are_reachable():
@@ -75,6 +78,15 @@ def test_package_imports_without_pygame():
     )
     assert result.returncode == 0, result.stderr
     assert result.stdout.strip() == graphik_pkg.__version__
+
+
+def test_package_rejects_unknown_attribute_names():
+    # Defining __getattr__ on the package takes over every failed attribute
+    # lookup, so the miss path has to keep raising AttributeError -- returning
+    # None or letting a different error escape would make a typo'd import read
+    # as something other than "no such name".
+    with pytest.raises(AttributeError):
+        getattr(graphik_pkg, "Graphic")
 
 
 def _write_solid_image(path, color, size=(4, 4)):
@@ -175,6 +187,36 @@ def test_draw_image_rescales_when_size_changes(monkeypatch, tmp_path):
     assert [args[1] for args in scaled] == [(10, 10), (12, 12), (10, 10)]
 
 
+def test_draw_image_caches_each_path_independently(monkeypatch, tmp_path):
+    # Both caches are keyed on filePath alone, so a second asset must get its
+    # own entry rather than evicting the first (which would reload on every
+    # alternating call) or reusing it (which would draw the wrong image).
+    pygame.display.init()
+    display = pygame.display.set_mode((20, 20))
+    display.fill(Graphik.black)
+    graphik = Graphik(display)
+
+    redPath = tmp_path / "red.bmp"
+    bluePath = tmp_path / "blue.bmp"
+    _write_solid_image(redPath, (255, 0, 0))
+    _write_solid_image(bluePath, (0, 0, 255))
+
+    loaded = _count_image_loads(monkeypatch)
+
+    graphik.drawImage(str(redPath), 0, 0, 10, 10)
+    graphik.drawImage(str(bluePath), 10, 0, 10, 10)
+    graphik.drawImage(str(redPath), 0, 10, 10, 10)
+    graphik.drawImage(str(bluePath), 10, 10, 10, 10)
+
+    # One load per distinct path; the alternating repeats are served from cache.
+    assert [args[0] for args in loaded] == [str(redPath), str(bluePath)]
+    # And each quadrant carries the color of the path it was drawn from.
+    assert _rgb(display, (5, 5)) == (255, 0, 0)
+    assert _rgb(display, (15, 5)) == (0, 0, 255)
+    assert _rgb(display, (5, 15)) == (255, 0, 0)
+    assert _rgb(display, (15, 15)) == (0, 0, 255)
+
+
 def test_draw_image_converts_loaded_surface_for_faster_blits(monkeypatch, tmp_path):
     # pygame.Surface is a builtin type (its methods can't be monkeypatched),
     # so observe the conversion through the surface actually handed to
@@ -227,6 +269,28 @@ def test_draw_rectangle_fills_expected_region_with_color():
     assert _rgb(display, (4, 4)) == Graphik.red
     # Outside it, the background is untouched.
     assert _rgb(display, (8, 8)) == Graphik.black
+
+
+def test_draw_rectangle_fills_exactly_the_requested_region():
+    # drawButton's hit test is written against these bounds -- xpos through
+    # xpos + width - 1 on both axes -- so pin them on the fill itself, or the
+    # two can drift apart and leave the button's edges dead again.
+    graphik = _make_graphik()
+    display = graphik.getGameDisplay()
+    display.fill(Graphik.black)
+
+    graphik.drawRectangle(2, 2, 5, 5, Graphik.red)
+
+    # Every edge of the 5x5 region at (2,2)-(6,6) is painted...
+    assert _rgb(display, (2, 2)) == Graphik.red
+    assert _rgb(display, (6, 2)) == Graphik.red
+    assert _rgb(display, (2, 6)) == Graphik.red
+    assert _rgb(display, (6, 6)) == Graphik.red
+    # ...and the first coordinate past each far edge is not.
+    assert _rgb(display, (7, 4)) == Graphik.black
+    assert _rgb(display, (4, 7)) == Graphik.black
+    assert _rgb(display, (1, 4)) == Graphik.black
+    assert _rgb(display, (4, 1)) == Graphik.black
 
 
 def test_draw_text_blits_non_background_pixels():
@@ -359,6 +423,23 @@ def test_draw_text_drops_cached_font_when_the_display_session_changes(monkeypatc
         graphik.drawText("A", 5, 5, 12, Graphik.white)
 
     assert len(constructed) == 1
+
+
+def test_draw_text_keeps_cached_font_across_a_display_resize(monkeypatch):
+    # The session check compares display surface *objects*, and set_mode returns
+    # the same object when only the size changes. That is what stops a resizable
+    # window from discarding the font cache on every resize event, so it needs a
+    # test of its own -- the invalidation tests above pass either way.
+    graphik = _make_graphik((20, 20))
+    graphik.drawText("A", 5, 5, 12, Graphik.white)
+
+    resized = pygame.display.set_mode((30, 30))
+    assert resized is graphik.getGameDisplay(), "resize returned a new surface"
+
+    constructed = _count_font_constructions(monkeypatch)
+    graphik.drawText("A", 5, 5, 12, Graphik.white)
+
+    assert constructed == []
 
 
 def test_draw_button_draws_box_with_given_color():
