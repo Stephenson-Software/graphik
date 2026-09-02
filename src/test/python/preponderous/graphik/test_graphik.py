@@ -500,13 +500,26 @@ def test_caches_belong_to_the_instance_not_the_class(monkeypatch, tmp_path):
     constructed = _count_font_constructions(monkeypatch)
     loaded = _count_image_loads(monkeypatch)
 
+    # Warm the first instance's caches at two font sizes and one asset...
     first.drawText("A", 5, 5, 12, Graphik.white)
-    second.drawText("A", 5, 5, 12, Graphik.white)
+    first.drawText("A", 5, 5, 14, Graphik.white)
     first.drawImage(str(imagePath), 0, 0, 10, 10)
+
+    # ...then let the second instance draw one of those sizes and that asset...
+    second.drawText("A", 5, 5, 12, Graphik.white)
     second.drawImage(str(imagePath), 0, 0, 10, 10)
 
-    # One font and one load each: neither instance was served the other's cache.
-    assert len(constructed) == 2
+    # ...and ask the first instance for the size the second never touched.
+    first.drawText("A", 5, 5, 14, Graphik.white)
+
+    # The interleaving is what makes this sensitive to both ways the caches
+    # could stop being per-instance. If the dictionaries moved to the class
+    # along with _fontDisplay, the second instance would be handed the first's
+    # size-12 font and build nothing. If only the dictionaries moved, the
+    # second instance's first drawText would instead clear the shared cache --
+    # discarding the first's size-14 entry, which the final call would rebuild.
+    # Either way the sequence below stops matching.
+    assert [args[1] for args in constructed] == [12, 14, 12]
     assert len(loaded) == 2
 
 
