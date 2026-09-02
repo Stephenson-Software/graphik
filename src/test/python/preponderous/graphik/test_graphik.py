@@ -120,6 +120,19 @@ def test_draw_image_missing_file_raises(tmp_path):
         graphik.drawImage(str(missing), 0, 0, 10, 10)
 
 
+def test_draw_image_undecodable_file_raises_pygame_error(tmp_path):
+    # The docstring separates the two failure modes: a path with no file behind
+    # it raises FileNotFoundError, while a file pygame cannot decode raises
+    # pygame.error. Only the first was covered, and the test above accepts
+    # either type, so nothing pinned the second.
+    graphik = _make_graphik()
+    notAnImage = tmp_path / "not_really.bmp"
+    notAnImage.write_text("this is text, not an image")
+
+    with pytest.raises(pygame.error):
+        graphik.drawImage(str(notAnImage), 0, 0, 10, 10)
+
+
 def _count_image_loads(monkeypatch):
     # Wrap pygame.image.load so tests can observe how often it is called.
     loaded = []
@@ -157,6 +170,33 @@ def test_draw_image_reuses_loaded_surface_across_calls(monkeypatch, tmp_path):
         graphik.drawImage(str(image_path), 0, 0, 10, 10)
 
     assert len(loaded) == 1
+
+
+def test_draw_image_does_not_cache_a_failed_load(monkeypatch, tmp_path):
+    # The counterpart to the test above: only a *successful* load is cached, so
+    # a path that fails keeps raising and keeps being retried. Caching the
+    # failure instead would turn the second call into a silent no-op or a
+    # KeyError, and an asset that appears on disk later would never be picked
+    # up even though the process was told to draw it again.
+    graphik = _make_graphik()
+    missing = tmp_path / "appears_later.bmp"
+
+    loaded = _count_image_loads(monkeypatch)
+
+    for _ in range(3):
+        with pytest.raises((FileNotFoundError, pygame.error)):
+            graphik.drawImage(str(missing), 0, 0, 10, 10)
+
+    # Every call re-attempted the load rather than being served from a cache.
+    assert len(loaded) == 3
+
+    # And once the file exists, the very next call draws it -- no restart needed.
+    _write_solid_image(missing, (255, 0, 0))
+    display = graphik.getGameDisplay()
+    display.fill(Graphik.black)
+    graphik.drawImage(str(missing), 0, 0, 5, 5)
+
+    assert _rgb(display, (2, 2)) == (255, 0, 0)
 
 
 def test_draw_image_reuses_scaled_surface_for_the_same_size(monkeypatch, tmp_path):
@@ -442,6 +482,47 @@ def test_draw_text_keeps_cached_font_across_a_display_resize(monkeypatch):
     assert constructed == []
 
 
+def test_caches_belong_to_the_instance_not_the_class(monkeypatch, tmp_path):
+    # Both caches are built in __init__, so they are per-instance state. Moving
+    # either to a class attribute would share it across every Graphik and, for
+    # the font cache, defeat the display-session invalidation in _getFont:
+    # one instance's entries would survive into another instance bound to a
+    # display that instance never checked against. Pin the isolation on the
+    # observable work instead of on the private dictionaries.
+    pygame.display.init()
+    display = pygame.display.set_mode((20, 20))
+    first = Graphik(display)
+    second = Graphik(display)
+
+    imagePath = tmp_path / "red.bmp"
+    _write_solid_image(imagePath, (255, 0, 0))
+
+    constructed = _count_font_constructions(monkeypatch)
+    loaded = _count_image_loads(monkeypatch)
+
+    # Warm the first instance's caches at two font sizes and one asset...
+    first.drawText("A", 5, 5, 12, Graphik.white)
+    first.drawText("A", 5, 5, 14, Graphik.white)
+    first.drawImage(str(imagePath), 0, 0, 10, 10)
+
+    # ...then let the second instance draw one of those sizes and that asset...
+    second.drawText("A", 5, 5, 12, Graphik.white)
+    second.drawImage(str(imagePath), 0, 0, 10, 10)
+
+    # ...and ask the first instance for the size the second never touched.
+    first.drawText("A", 5, 5, 14, Graphik.white)
+
+    # The interleaving is what makes this sensitive to both ways the caches
+    # could stop being per-instance. If the dictionaries moved to the class
+    # along with _fontDisplay, the second instance would be handed the first's
+    # size-12 font and build nothing. If only the dictionaries moved, the
+    # second instance's first drawText would instead clear the shared cache --
+    # discarding the first's size-14 entry, which the final call would rebuild.
+    # Either way the sequence below stops matching.
+    assert [args[1] for args in constructed] == [12, 14, 12]
+    assert len(loaded) == 2
+
+
 def test_draw_button_draws_box_with_given_color():
     graphik = _make_graphik((40, 40))
     display = graphik.getGameDisplay()
@@ -459,6 +540,13 @@ def test_draw_button_draws_box_with_given_color():
         pytest.param((15, 15), (1, 0, 0), True, id="clicked_inside"),
         pytest.param((0, 0), (1, 0, 0), False, id="outside_box"),
         pytest.param((15, 15), (0, 0, 0), False, id="not_pressed"),
+        # The docstring promises button 1 specifically, so a press of only the
+        # middle and/or right buttons must not fire the callback -- a hit test
+        # written against any() rather than click[0] would pass every other case.
+        pytest.param((15, 15), (0, 1, 0), False, id="middle_button_only"),
+        pytest.param((15, 15), (0, 0, 1), False, id="right_button_only"),
+        # ...while button 1 held together with the others still counts.
+        pytest.param((15, 15), (1, 1, 1), True, id="all_buttons"),
     ],
 )
 def test_draw_button_invokes_callback_only_on_inside_click(
