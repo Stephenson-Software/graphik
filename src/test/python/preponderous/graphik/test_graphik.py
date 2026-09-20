@@ -89,6 +89,20 @@ def test_package_rejects_unknown_attribute_names():
         getattr(graphik_pkg, "Graphic")
 
 
+def test_star_import_exposes_graphik_and_version():
+    # `from preponderous.graphik import *` resolves every name in __all__ via
+    # the package's __getattr__, so Graphik must be reachable that way even
+    # though it is not bound in the module namespace until first access. A
+    # name listed in __all__ that __getattr__ cannot serve would make the star
+    # import itself raise AttributeError.
+    namespace = {}
+    exec("from preponderous.graphik import *", namespace)
+
+    assert namespace["Graphik"] is Graphik
+    assert namespace["__version__"] == graphik_pkg.__version__
+    assert set(graphik_pkg.__all__) == {"Graphik", "__version__"}
+
+
 def _write_solid_image(path, color, size=(4, 4)):
     # BMP is supported by pygame without SDL_image, so the fixture is portable.
     surface = pygame.Surface(size)
@@ -225,6 +239,29 @@ def test_draw_image_rescales_when_size_changes(monkeypatch, tmp_path):
 
     # One scale per distinct size requested, in request order.
     assert [args[1] for args in scaled] == [(10, 10), (12, 12), (10, 10)]
+
+
+def test_draw_image_scaled_cache_is_kept_per_path(monkeypatch, tmp_path):
+    # The scaled cache holds the most recent (size, surface) pair *per path*,
+    # not one pair overall. Rescaling one asset must therefore leave another
+    # asset's cached scale intact -- a single shared "last size" slot would
+    # rescale the blue image below even though its size never changed.
+    graphik = _make_graphik()
+    redPath = tmp_path / "red.bmp"
+    bluePath = tmp_path / "blue.bmp"
+    _write_solid_image(redPath, (255, 0, 0))
+    _write_solid_image(bluePath, (0, 0, 255))
+
+    scaled = _count_image_scales(monkeypatch)
+
+    graphik.drawImage(str(redPath), 0, 0, 10, 10)
+    graphik.drawImage(str(bluePath), 0, 0, 10, 10)
+    graphik.drawImage(str(redPath), 0, 0, 12, 12)
+    graphik.drawImage(str(bluePath), 0, 0, 10, 10)
+
+    # Red scaled twice (two sizes), blue once: its repeat is served from cache
+    # despite the red rescale in between.
+    assert [args[1] for args in scaled] == [(10, 10), (10, 10), (12, 12)]
 
 
 def test_draw_image_caches_each_path_independently(monkeypatch, tmp_path):
@@ -382,6 +419,31 @@ def test_draw_text_centers_the_text_on_the_given_position():
     assert abs((min(xs) + max(xs)) / 2 - xpos) <= 1
 
 
+def test_draw_text_renders_in_the_requested_color():
+    # The `color` argument is what the glyphs are painted with. Rendering is
+    # antialiased, so edge pixels are blends of the text color and the
+    # background -- but on a black background a red glyph can only ever
+    # produce shades of red, and its stems (several pixels wide at this size)
+    # contain fully-covered pixels that match the color exactly.
+    graphik = _make_graphik((100, 100))
+    display = graphik.getGameDisplay()
+    display.fill(Graphik.black)
+
+    graphik.drawText("W", 50, 50, 40, Graphik.red)
+
+    width, height = display.get_size()
+    inked = [
+        _rgb(display, (x, y))
+        for x in range(width)
+        for y in range(height)
+        if _rgb(display, (x, y)) != Graphik.black
+    ]
+    assert inked, "drawText left the surface untouched"
+    assert Graphik.red in inked
+    # No pixel picked up a green or blue component the requested color lacks.
+    assert all(g == 0 and b == 0 for _, g, b in inked)
+
+
 def _count_font_constructions(monkeypatch):
     # Wrap pygame.font.Font so tests can observe how often it is built.
     constructed = []
@@ -532,6 +594,66 @@ def test_draw_button_draws_box_with_given_color():
 
     # A corner of the box, away from the centered text, keeps the box color.
     assert _rgb(display, (11, 11)) == Graphik.blue
+
+
+def _button_label_ink(display, colorBox, background=Graphik.black):
+    # Pixels that are neither the untouched background nor the box fill are
+    # the rendered label (its antialiased edges included).
+    width, height = display.get_size()
+    return [
+        (x, y)
+        for x in range(width)
+        for y in range(height)
+        if _rgb(display, (x, y)) not in (background, colorBox)
+    ]
+
+
+def test_draw_button_centers_the_label_within_the_box():
+    # Pins the documented "rectangle and centered text": the label is anchored
+    # on the box's midpoint, so it sits inside the box and straddles that
+    # point rather than hanging off the top-left corner the box is drawn from.
+    graphik = _make_graphik((200, 100))
+    display = graphik.getGameDisplay()
+    display.fill(Graphik.black)
+
+    xpos, ypos, width, height = 20, 10, 160, 80
+    graphik.drawButton(xpos, ypos, width, height, Graphik.blue, Graphik.white, 30, "WWWW", lambda: None)
+
+    ink = _button_label_ink(display, Graphik.blue)
+    assert ink, "drawButton drew no label"
+    xs = [x for x, _ in ink]
+    ys = [y for _, y in ink]
+    centerX, centerY = xpos + width // 2, ypos + height // 2
+
+    # Entirely within the drawn box...
+    assert xpos <= min(xs) and max(xs) < xpos + width
+    assert ypos <= min(ys) and max(ys) < ypos + height
+    # ...straddling the box midpoint on both axes...
+    assert min(xs) < centerX < max(xs)
+    assert min(ys) < centerY < max(ys)
+    # ...and horizontally centered on it. As in the drawText centering test,
+    # only the horizontal midpoint is asserted tightly, because glyph ink is
+    # vertically asymmetric within the rect that is actually centered.
+    assert abs((min(xs) + max(xs)) / 2 - centerX) <= 1
+
+
+def test_draw_button_renders_the_label_in_color_text():
+    # colorBox and colorText are separate arguments, and the label must be
+    # painted with the second one -- swapping them, or passing colorBox to
+    # drawText, would leave the label invisible against its own box.
+    graphik = _make_graphik((200, 100))
+    display = graphik.getGameDisplay()
+    display.fill(Graphik.black)
+
+    graphik.drawButton(20, 10, 160, 80, Graphik.blue, Graphik.red, 30, "WWWW", lambda: None)
+
+    ink = _button_label_ink(display, Graphik.blue)
+    assert ink, "drawButton drew no label"
+    # Fully-covered glyph pixels carry the exact text color; the rest are
+    # antialiased blends of it with the blue box, never any other hue.
+    colors = {_rgb(display, p) for p in ink}
+    assert Graphik.red in colors
+    assert all(g == 0 for _, g, _ in colors)
 
 
 @pytest.mark.parametrize(
