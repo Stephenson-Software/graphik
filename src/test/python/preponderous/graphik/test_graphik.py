@@ -314,6 +314,32 @@ def test_draw_image_converts_loaded_surface_for_faster_blits(monkeypatch, tmp_pa
     assert sourcePassedToScale.get_flags() & pygame.SRCALPHA
 
 
+def test_draw_image_leaves_display_visible_through_transparent_pixels(tmp_path):
+    # The test above only proves an alpha channel was *added*. drawImage's
+    # comment also promises convert_alpha() preserves any per-pixel alpha the
+    # file already carries, which is what lets a sprite's transparent
+    # background show whatever was drawn underneath it. A conversion that adds
+    # an alpha channel but discards the file's own -- e.g.
+    # convert().convert_alpha() -- would satisfy the SRCALPHA check above
+    # while painting those pixels opaque.
+    graphik = _make_graphik()
+    display = graphik.getGameDisplay()
+    display.fill(Graphik.blue)
+
+    # Left pixel opaque red, right pixel fully transparent. A 32-bit BMP keeps
+    # the alpha channel without needing SDL_image, like _write_solid_image.
+    sprite = pygame.Surface((2, 1), pygame.SRCALPHA)
+    sprite.fill((0, 0, 0, 0))
+    sprite.set_at((0, 0), (255, 0, 0, 255))
+    image_path = tmp_path / "sprite.bmp"
+    pygame.image.save(sprite, str(image_path))
+
+    graphik.drawImage(str(image_path), 0, 0, 2, 1)
+
+    assert _rgb(display, (0, 0)) == (255, 0, 0)
+    assert _rgb(display, (1, 0)) == Graphik.blue
+
+
 def test_draw_image_still_blits_correctly_after_caching(tmp_path):
     pygame.display.init()
     display = pygame.display.set_mode((20, 20))
