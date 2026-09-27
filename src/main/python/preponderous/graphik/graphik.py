@@ -192,6 +192,10 @@ class Graphik:
         restarts. A path that fails to load caches nothing and raises on every
         call.
 
+        Only the most recently requested size is kept per path: drawing the
+        same file at a different size rescales it and replaces the cached
+        scale, so alternating between two sizes rescales on every call.
+
         Args:
             filePath: Path to the image file, used as the cache key.
             xpos: X coordinate of the image's left edge, in pixels.

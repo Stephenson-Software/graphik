@@ -37,7 +37,7 @@ Public `Graphik` methods:
 - `drawRectangle(xpos, ypos, width, height, color)` — `xpos`/`ypos` are the rectangle's top-left corner.
 - `drawText(text, xpos, ypos, size, color)` — `xpos`/`ypos` are the **center** of the rendered text, not its top-left corner. This differs from `drawRectangle`, `drawButton` and `drawImage`, which all position their top-left corner at the given coordinates.
 - `drawButton(xpos, ypos, width, height, colorBox, colorText, sizeText, text, function)` — draws a rectangle and centered text, and calls `function()` on every call where the mouse is held inside the button with button 1 down (there is no click-edge detection, so a held-down mouse fires `function()` once per call, not once per click). Callers wanting once-per-click semantics must debounce on their side. The clickable region is exactly the drawn box — `xpos` through `xpos + width - 1`, and `ypos` through `ypos + height - 1` — so buttons laid out edge to edge share no clickable coordinate.
-- `drawImage(filePath, xpos, ypos, width, height)` — caches the loaded and scaled surface by `filePath`, so an image edited on disk mid-run will not be picked up until the process restarts.
+- `drawImage(filePath, xpos, ypos, width, height)` — caches the loaded and scaled surface by `filePath`, so an image edited on disk mid-run will not be picked up until the process restarts. Only the most recently requested size is kept per path, so drawing the same file at two alternating sizes rescales it on every call.
 
 Color constants: `Graphik.black`, `Graphik.white`, `Graphik.red`, `Graphik.green`, `Graphik.blue`.
 
