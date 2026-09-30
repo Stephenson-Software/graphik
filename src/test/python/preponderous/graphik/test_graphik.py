@@ -127,18 +127,48 @@ def test_draw_image_blits_scaled_image_to_position(tmp_path):
     assert tuple(display.get_at((15, 15)))[:3] == (0, 0, 0)
 
 
-def test_draw_image_missing_file_raises(tmp_path):
+def test_draw_image_fills_exactly_the_requested_region(tmp_path):
+    # Every other drawImage test scales to a square (or a single-pixel-high)
+    # size, so nothing distinguishes `width` from `height`: scaling to
+    # (height, width) instead passes all of them. Pin the exact edges of a
+    # non-square region at an offset, as the drawRectangle test below does,
+    # which also pins the documented top-left anchoring down to the pixel.
+    graphik = _make_graphik((20, 20))
+    display = graphik.getGameDisplay()
+    display.fill(Graphik.black)
+
+    image_path = tmp_path / "red.bmp"
+    _write_solid_image(image_path, (255, 0, 0))
+
+    graphik.drawImage(str(image_path), 3, 4, 6, 5)
+
+    # Every corner of the 6x5 region at (3,4)-(8,8) is painted...
+    assert _rgb(display, (3, 4)) == (255, 0, 0)
+    assert _rgb(display, (8, 4)) == (255, 0, 0)
+    assert _rgb(display, (3, 8)) == (255, 0, 0)
+    assert _rgb(display, (8, 8)) == (255, 0, 0)
+    # ...and the first coordinate past each edge is not.
+    assert _rgb(display, (2, 6)) == Graphik.black
+    assert _rgb(display, (9, 6)) == Graphik.black
+    assert _rgb(display, (5, 3)) == Graphik.black
+    assert _rgb(display, (5, 9)) == Graphik.black
+
+
+def test_draw_image_missing_file_raises_file_not_found_error(tmp_path):
+    # The docstring promises FileNotFoundError for a path with no file behind
+    # it, distinct from the pygame.error an undecodable file raises (see the
+    # next test). Accepting either type here would let the two failure modes
+    # collapse into one without any test noticing.
     graphik = _make_graphik()
     missing = tmp_path / "does_not_exist.bmp"
-    with pytest.raises((FileNotFoundError, pygame.error)):
+    with pytest.raises(FileNotFoundError):
         graphik.drawImage(str(missing), 0, 0, 10, 10)
 
 
 def test_draw_image_undecodable_file_raises_pygame_error(tmp_path):
     # The docstring separates the two failure modes: a path with no file behind
-    # it raises FileNotFoundError, while a file pygame cannot decode raises
-    # pygame.error. Only the first was covered, and the test above accepts
-    # either type, so nothing pinned the second.
+    # it raises FileNotFoundError (pinned above), while a file pygame cannot
+    # decode raises pygame.error.
     graphik = _make_graphik()
     notAnImage = tmp_path / "not_really.bmp"
     notAnImage.write_text("this is text, not an image")
@@ -198,7 +228,7 @@ def test_draw_image_does_not_cache_a_failed_load(monkeypatch, tmp_path):
     loaded = _count_image_loads(monkeypatch)
 
     for _ in range(3):
-        with pytest.raises((FileNotFoundError, pygame.error)):
+        with pytest.raises(FileNotFoundError):
             graphik.drawImage(str(missing), 0, 0, 10, 10)
 
     # Every call re-attempted the load rather than being served from a cache.
