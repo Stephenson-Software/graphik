@@ -669,9 +669,10 @@ def _draw_image(graphik, imagePath):
 def test_draw_methods_render_to_the_bound_surface_not_the_display(draw, tmp_path):
     # The class docstring promises every draw method renders to the surface the
     # instance was constructed with. Every other test binds Graphik to the
-    # display itself, so a draw method that wrote to
-    # pygame.display.get_surface() instead would pass all of them. Bind an
-    # off-screen surface here and require the display to stay untouched.
+    # display itself, so none of them pins that: a draw method that wrote to
+    # pygame.display.get_surface() instead would only trip the font-session
+    # test above, and only incidentally. Bind an off-screen surface here and
+    # require the display to stay untouched.
     pygame.display.init()
     pygame.font.init()
     display = pygame.display.set_mode((20, 20))
