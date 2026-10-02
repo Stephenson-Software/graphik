@@ -641,6 +641,55 @@ def test_caches_belong_to_the_instance_not_the_class(monkeypatch, tmp_path):
     assert len(loaded) == 2
 
 
+def _draw_rectangle(graphik, imagePath):
+    graphik.drawRectangle(2, 2, 10, 10, Graphik.red)
+
+
+def _draw_text(graphik, imagePath):
+    graphik.drawText("W", 10, 10, 16, Graphik.white)
+
+
+def _draw_button(graphik, imagePath):
+    graphik.drawButton(2, 2, 16, 16, Graphik.blue, Graphik.white, 10, "Go", lambda: None)
+
+
+def _draw_image(graphik, imagePath):
+    graphik.drawImage(str(imagePath), 2, 2, 10, 10)
+
+
+@pytest.mark.parametrize(
+    "draw",
+    [
+        pytest.param(_draw_rectangle, id="drawRectangle"),
+        pytest.param(_draw_text, id="drawText"),
+        pytest.param(_draw_button, id="drawButton"),
+        pytest.param(_draw_image, id="drawImage"),
+    ],
+)
+def test_draw_methods_render_to_the_bound_surface_not_the_display(draw, tmp_path):
+    # The class docstring promises every draw method renders to the surface the
+    # instance was constructed with. Every other test binds Graphik to the
+    # display itself, so a draw method that wrote to
+    # pygame.display.get_surface() instead would pass all of them. Bind an
+    # off-screen surface here and require the display to stay untouched.
+    pygame.display.init()
+    pygame.font.init()
+    display = pygame.display.set_mode((20, 20))
+    display.fill(Graphik.black)
+    target = pygame.Surface((20, 20))
+    target.fill(Graphik.black)
+    graphik = Graphik(target)
+
+    imagePath = tmp_path / "green.bmp"
+    _write_solid_image(imagePath, (0, 255, 0))
+
+    draw(graphik, imagePath)
+
+    pixels = [(x, y) for x in range(20) for y in range(20)]
+    assert any(_rgb(target, p) != Graphik.black for p in pixels), "nothing was drawn to the bound surface"
+    assert all(_rgb(display, p) == Graphik.black for p in pixels), "the display was drawn to"
+
+
 def test_draw_button_draws_box_with_given_color():
     graphik = _make_graphik((40, 40))
     display = graphik.getGameDisplay()
