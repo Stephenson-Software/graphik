@@ -49,6 +49,24 @@ def test_no_arg_constructor_creates_default_display():
     assert graphik.getGameDisplay().get_size() == (900, 600)
 
 
+@pytest.mark.parametrize("supplied", [True, False], ids=["supplied_display", "default_display"])
+def test_game_display_attribute_is_the_bound_surface(supplied):
+    # Consumers read the gameDisplay attribute directly rather than going
+    # through getGameDisplay() -- Apex sizes its layout off
+    # graphik.gameDisplay.get_size() -- so the attribute name is part of the
+    # public contract. Renaming it to something private would leave every
+    # other test in this file green while breaking those call sites, so pin
+    # it on both constructor paths.
+    pygame.display.init()
+    if supplied:
+        display = pygame.display.set_mode((10, 10))
+        graphik = Graphik(display)
+        assert graphik.gameDisplay is display
+    else:
+        graphik = Graphik()
+    assert graphik.gameDisplay is graphik.getGameDisplay()
+
+
 def test_color_constants_are_reachable():
     # The color constants used to be assigned only in an unreachable __init__;
     # they must now be present on both the class and any instance.
