@@ -55,8 +55,8 @@ def test_game_display_attribute_is_the_bound_surface(supplied):
     # through getGameDisplay() -- Apex sizes its layout off
     # graphik.gameDisplay.get_size() -- so the attribute name is part of the
     # public contract. Renaming it to something private would leave every
-    # test above green while breaking those call sites, so pin it on both
-    # constructor paths.
+    # other test in this file green while breaking those call sites, so pin
+    # it on both constructor paths.
     pygame.display.init()
     if supplied:
         display = pygame.display.set_mode((10, 10))
