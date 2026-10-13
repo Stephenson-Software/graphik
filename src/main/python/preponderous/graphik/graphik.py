@@ -196,6 +196,11 @@ class Graphik:
         same file at a different size rescales it and replaces the cached
         scale, so alternating between two sizes rescales on every call.
 
+        Unlike the other draw methods, this needs a display mode to have been
+        set (``pygame.display.set_mode``), even when the instance is bound to
+        an off-screen surface, because the loaded image is converted to the
+        display's pixel format.
+
         Args:
             filePath: Path to the image file, used as the cache key.
             xpos: X coordinate of the image's left edge, in pixels.
@@ -205,7 +210,8 @@ class Graphik:
 
         Raises:
             FileNotFoundError: If no file exists at ``filePath``.
-            pygame.error: If the file exists but pygame cannot decode it.
+            pygame.error: If the file exists but pygame cannot decode it, or
+                if no display mode has been set.
         """
         # Loading decodes the file from disk and scaling resamples it, both of
         # which cost far more than the blit() they exist to serve, so cache
