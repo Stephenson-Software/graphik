@@ -216,6 +216,7 @@ def test_draw_image_requires_a_display_mode_even_for_an_off_screen_surface(tmp_p
 
     graphik.drawRectangle(0, 0, 2, 2, Graphik.green)
     graphik.drawText("A", 4, 4, 8, Graphik.white)
+    graphik.drawButton(0, 12, 8, 8, Graphik.blue, Graphik.white, 6, "Go", lambda: None)
     with pytest.raises(pygame.error):
         graphik.drawImage(str(imagePath), 12, 12, 6, 6)
     assert _rgb(target, (15, 15)) == Graphik.black
