@@ -195,6 +195,36 @@ def test_draw_image_undecodable_file_raises_pygame_error(tmp_path):
         graphik.drawImage(str(notAnImage), 0, 0, 10, 10)
 
 
+def test_draw_image_requires_a_display_mode_even_for_an_off_screen_surface(tmp_path):
+    # The docstring and README both document that drawImage, unlike the other
+    # draw methods, needs pygame.display.set_mode to have been called -- the
+    # loaded image is converted to the display's pixel format -- even when the
+    # instance is bound to an off-screen surface. Pin both halves: the other
+    # draw methods work with no display mode, drawImage raises pygame.error,
+    # and the failure caches nothing, so the same instance draws the image
+    # once a mode is set.
+    pygame.display.quit()
+    pygame.display.init()
+    pygame.font.init()
+    assert pygame.display.get_surface() is None
+    target = pygame.Surface((20, 20))
+    target.fill(Graphik.black)
+    graphik = Graphik(target)
+
+    imagePath = tmp_path / "red.bmp"
+    _write_solid_image(imagePath, (255, 0, 0))
+
+    graphik.drawRectangle(0, 0, 2, 2, Graphik.green)
+    graphik.drawText("A", 4, 4, 8, Graphik.white)
+    with pytest.raises(pygame.error):
+        graphik.drawImage(str(imagePath), 12, 12, 6, 6)
+    assert _rgb(target, (15, 15)) == Graphik.black
+
+    pygame.display.set_mode((20, 20))
+    graphik.drawImage(str(imagePath), 12, 12, 6, 6)
+    assert _rgb(target, (15, 15)) == (255, 0, 0)
+
+
 def _count_image_loads(monkeypatch):
     # Wrap pygame.image.load so tests can observe how often it is called.
     loaded = []
