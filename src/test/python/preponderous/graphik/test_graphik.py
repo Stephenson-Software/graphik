@@ -441,9 +441,9 @@ def test_draw_image_cache_survives_a_pygame_restart(monkeypatch, tmp_path):
     # invalidation on the claim that a loaded surface survives a
     # pygame.quit()/init() cycle. Pin that claim: after a restart, an instance
     # rebound to the new display keeps serving the cached surfaces -- no
-    # reload, no rescale -- and they still draw correctly. Should the claim
-    # ever stop holding, this fails instead of the cache quietly blitting
-    # freed memory.
+    # reload, no rescale -- and they still draw correctly. The no-reload
+    # assertion pins the cache-reuse half; the pixel assertions are what
+    # catch a cached surface that no longer survives the restart.
     graphik = _make_graphik((20, 20))
     image_path = tmp_path / "red.bmp"
     _write_solid_image(image_path, (255, 0, 0))
