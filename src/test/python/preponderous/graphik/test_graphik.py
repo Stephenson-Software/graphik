@@ -436,6 +436,34 @@ def test_draw_image_still_blits_correctly_after_caching(tmp_path):
     assert tuple(display.get_at((15, 15)))[:3] == (0, 0, 0)
 
 
+def test_draw_image_cache_survives_a_pygame_restart(monkeypatch, tmp_path):
+    # drawImage's comment justifies skipping the font cache's display-session
+    # invalidation on the claim that a loaded surface survives a
+    # pygame.quit()/init() cycle. Pin that claim: after a restart, an instance
+    # rebound to the new display keeps serving the cached surfaces -- no
+    # reload, no rescale -- and they still draw correctly. The no-reload
+    # assertion pins the cache-reuse half; the pixel assertions are what
+    # catch a cached surface that no longer survives the restart.
+    graphik = _make_graphik((20, 20))
+    image_path = tmp_path / "red.bmp"
+    _write_solid_image(image_path, (255, 0, 0))
+    graphik.drawImage(str(image_path), 0, 0, 10, 10)
+
+    pygame.quit()
+    pygame.init()
+    graphik.gameDisplay = pygame.display.set_mode((20, 20))
+    display = graphik.getGameDisplay()
+    display.fill(Graphik.black)
+
+    loaded = _count_image_loads(monkeypatch)
+    scaled = _count_image_scales(monkeypatch)
+    graphik.drawImage(str(image_path), 0, 0, 10, 10)
+
+    assert (loaded, scaled) == ([], [])
+    assert _rgb(display, (5, 5)) == (255, 0, 0)
+    assert _rgb(display, (15, 15)) == Graphik.black
+
+
 def _rgb(display, pos):
     return tuple(display.get_at(pos))[:3]
 
