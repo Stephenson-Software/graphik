@@ -947,3 +947,30 @@ def test_draw_button_fires_callback_once_per_call_while_mouse_held(monkeypatch):
         graphik.drawButton(10, 10, 20, 20, Graphik.blue, Graphik.white, 10, "Go", lambda: calls.append(True))
 
     assert len(calls) == held_down_frames
+
+
+def test_draw_button_paints_before_invoking_the_callback(monkeypatch):
+    # The box and label are drawn first and the hit test runs last, so by the
+    # time function() is called the button is already on the surface, and
+    # anything the callback paints (e.g. switching to another screen) lands
+    # on top of it rather than being painted over. Moving the hit test ahead
+    # of the drawing -- say, to pick a hover color -- would leave every other
+    # drawButton test green while letting the button overwrite the callback's
+    # output in the same frame.
+    graphik = _make_graphik((40, 40))
+    display = graphik.getGameDisplay()
+    display.fill(Graphik.black)
+    monkeypatch.setattr(pygame.mouse, "get_pos", lambda: (15, 15))
+    monkeypatch.setattr(pygame.mouse, "get_pressed", lambda: (1, 0, 0))
+    seenAtCallback = []
+
+    def callback():
+        seenAtCallback.append(_rgb(display, (11, 11)))
+        display.fill(Graphik.green)
+
+    graphik.drawButton(10, 10, 20, 20, Graphik.blue, Graphik.white, 10, "Go", callback)
+
+    # The box was already painted when the callback ran...
+    assert seenAtCallback == [Graphik.blue]
+    # ...and nothing drawButton does afterwards paints over the callback's output.
+    assert all(_rgb(display, (x, y)) == Graphik.green for x in range(40) for y in range(40))
