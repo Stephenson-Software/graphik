@@ -577,6 +577,33 @@ def test_draw_text_renders_in_the_requested_color():
     assert all(g == 0 and b == 0 for _, g, b in inked)
 
 
+def test_draw_text_leaves_the_surface_visible_around_the_glyphs():
+    # Only the glyphs are painted: the rest of the rendered text's rectangle
+    # keeps whatever was already on the surface. drawButton depends on this to
+    # show its label over colorBox, and every other text test draws onto a
+    # black background, where rendering with an opaque black background would
+    # look identical -- so draw onto green and require the green to survive.
+    graphik = _make_graphik((100, 100))
+    display = graphik.getGameDisplay()
+    display.fill(Graphik.green)
+
+    text, xpos, ypos, size = ".", 50, 50, 40
+    graphik.drawText(text, xpos, ypos, size, Graphik.white)
+
+    # A period inks only the bottom of its line, so the top row of the
+    # rectangle drawText centers on (xpos, ypos) has no glyph pixels in it.
+    textRectangle = pygame.Rect((0, 0), pygame.font.Font("freesansbold.ttf", size).size(text))
+    textRectangle.center = (xpos, ypos)
+    width, height = display.get_size()
+    assert any(
+        _rgb(display, (x, y)) != Graphik.green for x in range(width) for y in range(height)
+    ), "drawText left the surface untouched"
+    assert all(
+        _rgb(display, (x, textRectangle.top)) == Graphik.green
+        for x in range(textRectangle.left, textRectangle.right)
+    )
+
+
 def _count_font_constructions(monkeypatch):
     # Wrap pygame.font.Font so tests can observe how often it is built.
     constructed = []
