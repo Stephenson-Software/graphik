@@ -604,6 +604,20 @@ def test_draw_text_leaves_the_surface_visible_around_the_glyphs():
     )
 
 
+def test_draw_text_accepts_an_empty_string_and_paints_nothing():
+    # An empty string renders to a zero-width surface rather than raising, so
+    # a caller can pass "" (e.g. a label with nothing to show yet) without
+    # guarding the call. Nothing may be painted for it.
+    graphik = _make_graphik((40, 40))
+    display = graphik.getGameDisplay()
+    display.fill(Graphik.green)
+
+    graphik.drawText("", 20, 20, 12, Graphik.white)
+
+    width, height = display.get_size()
+    assert all(_rgb(display, (x, y)) == Graphik.green for x in range(width) for y in range(height))
+
+
 def _count_font_constructions(monkeypatch):
     # Wrap pygame.font.Font so tests can observe how often it is built.
     constructed = []
@@ -864,6 +878,23 @@ def test_draw_button_renders_the_label_in_color_text():
     colors = {_rgb(display, p) for p in ink}
     assert Graphik.red in colors
     assert all(g == 0 for _, g, _ in colors)
+
+
+def test_draw_button_with_an_empty_label_draws_a_plain_box(monkeypatch):
+    # An empty label is not an error: the box is still painted solid, with no
+    # label ink on it, and the button stays clickable.
+    graphik = _make_graphik((40, 40))
+    display = graphik.getGameDisplay()
+    display.fill(Graphik.black)
+    calls = []
+    monkeypatch.setattr(pygame.mouse, "get_pos", lambda: (15, 15))
+    monkeypatch.setattr(pygame.mouse, "get_pressed", lambda: (1, 0, 0))
+
+    graphik.drawButton(10, 10, 20, 20, Graphik.blue, Graphik.white, 10, "", lambda: calls.append(True))
+
+    assert all(_rgb(display, (x, y)) == Graphik.blue for x in range(10, 30) for y in range(10, 30))
+    assert _button_label_ink(display, Graphik.blue) == []
+    assert calls == [True]
 
 
 @pytest.mark.parametrize(
