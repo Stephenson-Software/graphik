@@ -1032,3 +1032,27 @@ def test_draw_button_paints_before_invoking_the_callback(monkeypatch):
     assert seenAtCallback == [Graphik.blue]
     # ...and nothing drawButton does afterwards paints over the callback's output.
     assert all(_rgb(display, (x, y)) == Graphik.green for x in range(40) for y in range(40))
+
+
+def test_draw_button_hit_tests_in_window_coordinates_not_the_bound_surface(monkeypatch):
+    # pygame.mouse.get_pos() reports the cursor relative to the window, and the
+    # hit test compares it against xpos/ypos unchanged. When the instance is
+    # bound to a surface that does not sit at the window's origin -- here a
+    # subsurface offset by (100, 100) -- the box is painted at its offset
+    # position, but the clickable region stays at the raw (xpos, ypos) in
+    # window coordinates. Pins that behavior so the docs describing it cannot
+    # drift from it unnoticed.
+    pygame.display.init()
+    pygame.font.init()
+    display = pygame.display.set_mode((200, 200))
+    display.fill(Graphik.black)
+    graphik = Graphik(display.subsurface((100, 100, 50, 50)))
+    box = (0, 0, 20, 20)
+
+    # A press over the painted box (clear of the centered label), in window
+    # coordinates, does not fire...
+    assert not _click_at(monkeypatch, graphik, (102, 102), box=box)
+    assert _rgb(display, (102, 102)) == Graphik.blue
+    # ...while a press over the unpainted window corner does.
+    assert _click_at(monkeypatch, graphik, (2, 2), box=box)
+    assert _rgb(display, (2, 2)) == Graphik.black

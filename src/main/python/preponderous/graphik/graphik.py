@@ -151,6 +151,15 @@ class Graphik:
         edge therefore share no clickable coordinate -- a boundary belongs to
         the button whose left/top edge sits on it.
 
+        The hit test reads ``pygame.mouse.get_pos()``, which is relative to
+        the window, and compares it against ``(xpos, ypos)`` unchanged. The
+        clickable region therefore only lines up with the drawn box when the
+        instance is bound to the display itself (or another surface whose
+        top-left sits at the window's origin). For a subsurface or an
+        off-screen surface blitted elsewhere, the box is painted at the
+        surface's position but stays clickable at ``(xpos, ypos)`` in window
+        coordinates.
+
         Args:
             xpos: X coordinate of the box's left edge, in pixels.
             ypos: Y coordinate of the box's top edge, in pixels.
