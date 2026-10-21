@@ -31,7 +31,7 @@ graphik.drawImage("path/to/image.png", 100, 300, 200, 200)
 ```
 
 Public `Graphik` methods:
-- `Graphik(gameDisplay=None)` — construct a helper bound to a pygame display surface (creates a default 900x600 window if none is given).
+- `Graphik(gameDisplay=None)` — construct a helper bound to a pygame display surface (creates a default 900x600 window if none is given — replacing, not reusing, any display mode already set, so an existing window is resized to 900x600).
 - `getGameDisplay()` — returns the bound display surface.
 - `getVersion()` — returns the installed graphik version string.
 - `drawRectangle(xpos, ypos, width, height, color)` — `xpos`/`ypos` are the rectangle's top-left corner.
