@@ -41,7 +41,9 @@ class Graphik:
             gameDisplay: The pygame surface every draw method renders to,
                 normally the one returned by ``pygame.display.set_mode``.
                 When omitted, a default 900x600 display is created, which
-                opens a window as a side effect.
+                opens a window as a side effect. A display mode that is
+                already set is not reused: it is replaced, resizing the
+                existing window to 900x600.
         """
         # Consumers normally pass their own gameDisplay-backed surface. When
         # none is supplied, fall back to a default 900x600 window so the

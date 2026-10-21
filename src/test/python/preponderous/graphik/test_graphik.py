@@ -49,6 +49,20 @@ def test_no_arg_constructor_creates_default_display():
     assert graphik.getGameDisplay().get_size() == (900, 600)
 
 
+def test_no_arg_constructor_replaces_an_existing_display_mode():
+    # Graphik() calls set_mode unconditionally rather than adopting a display
+    # that is already open, so a consumer that set its own mode first has that
+    # window resized to 900x600 underneath it. Pin the current behavior so a
+    # change to "reuse the existing display" is a deliberate, documented one.
+    pygame.display.init()
+    pygame.display.set_mode((30, 20))
+
+    graphik = Graphik()
+
+    assert graphik.getGameDisplay().get_size() == (900, 600)
+    assert pygame.display.get_surface().get_size() == (900, 600)
+
+
 @pytest.mark.parametrize("supplied", [True, False], ids=["supplied_display", "default_display"])
 def test_game_display_attribute_is_the_bound_surface(supplied):
     # Consumers read the gameDisplay attribute directly rather than going
