@@ -894,6 +894,27 @@ def test_draw_button_renders_the_label_in_color_text():
     assert all(g == 0 for _, g, _ in colors)
 
 
+def test_draw_button_does_not_clip_a_label_larger_than_the_box(monkeypatch):
+    # The label is drawn with drawText onto the whole surface, not into the
+    # box, so a label too big for its box overflows it rather than being cut
+    # off at the box edge. The overflow is painted but not clickable: the hit
+    # test covers only the box. Pins both so the docs describing them cannot
+    # drift unnoticed.
+    graphik = _make_graphik((60, 40))
+    display = graphik.getGameDisplay()
+    display.fill(Graphik.black)
+    xpos, ypos, width, height = 25, 15, 10, 10
+
+    graphik.drawButton(xpos, ypos, width, height, Graphik.blue, Graphik.white, 20, "WWWW", lambda: None)
+
+    ink = _button_label_ink(display, Graphik.blue)
+    outside = [(x, y) for x, y in ink if not (xpos <= x < xpos + width and ypos <= y < ypos + height)]
+    assert outside, "the label was clipped to the box"
+
+    # A press on a painted label pixel outside the box does not fire.
+    assert not _click_at(monkeypatch, graphik, outside[0], box=(xpos, ypos, width, height))
+
+
 def test_draw_button_with_an_empty_label_draws_a_plain_box(monkeypatch):
     # An empty label is not an error: the box is still painted solid, with no
     # label ink on it, and the button stays clickable.
