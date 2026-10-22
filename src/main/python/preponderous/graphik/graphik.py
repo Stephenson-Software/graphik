@@ -170,7 +170,9 @@ class Graphik:
             colorBox: Fill color of the box as an ``(r, g, b)`` tuple.
             colorText: Color of the label as an ``(r, g, b)`` tuple.
             sizeText: Font size of the label, in points.
-            text: The label, centered within the box.
+            text: The label, centered on the box. It is not clipped to the
+                box: a label too large for it overflows past the box edges,
+                and the overflow is painted but not clickable.
             function: Zero-argument callable invoked as described above.
         """
         # Polls the current mouse state rather than tracking press/release
