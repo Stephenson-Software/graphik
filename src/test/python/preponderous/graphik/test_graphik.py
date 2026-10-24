@@ -823,6 +823,82 @@ def test_draw_methods_render_to_the_bound_surface_not_the_display(draw, tmp_path
     assert all(_rgb(display, p) == Graphik.black for p in pixels), "the display was drawn to"
 
 
+def _draw_rectangle_at(graphik, imagePath, xpos, ypos):
+    graphik.drawRectangle(xpos, ypos, 10, 10, (0, 255, 0))
+
+
+def _draw_image_at(graphik, imagePath, xpos, ypos):
+    graphik.drawImage(str(imagePath), xpos, ypos, 10, 10)
+
+
+def _draw_button_at(graphik, imagePath, xpos, ypos):
+    # Empty label, so the whole box is the expected color.
+    graphik.drawButton(xpos, ypos, 10, 10, (0, 255, 0), Graphik.white, 10, "", lambda: None)
+
+
+@pytest.mark.parametrize(
+    "draw",
+    [
+        pytest.param(_draw_rectangle_at, id="drawRectangle"),
+        pytest.param(_draw_image_at, id="drawImage"),
+        pytest.param(_draw_button_at, id="drawButton"),
+    ],
+)
+@pytest.mark.parametrize(
+    "xpos, ypos",
+    [
+        pytest.param(-5, -5, id="past_top_left"),
+        pytest.param(15, -5, id="past_top_right"),
+        pytest.param(-5, 15, id="past_bottom_left"),
+        pytest.param(15, 15, id="past_bottom_right"),
+    ],
+)
+def test_draw_methods_clip_a_shape_that_crosses_the_surface_edge(draw, xpos, ypos, tmp_path):
+    # Consumers that scroll a tiled view draw tiles straddling the edge of the
+    # display every frame, relying on the part that lands on the surface being
+    # painted and the rest being dropped -- not on a raise, and not on the
+    # shape being shifted to fit. Pin that for every edge, since a coordinate
+    # clamp or a negative-coordinate guard added to any of these methods would
+    # leave every other test green.
+    pygame.display.init()
+    pygame.font.init()
+    display = pygame.display.set_mode((20, 20))
+    display.fill(Graphik.black)
+    graphik = Graphik(display)
+
+    imagePath = tmp_path / "green.bmp"
+    _write_solid_image(imagePath, (0, 255, 0))
+
+    draw(graphik, imagePath, xpos, ypos)
+
+    for x in range(20):
+        for y in range(20):
+            inside = xpos <= x < xpos + 10 and ypos <= y < ypos + 10
+            expected = (0, 255, 0) if inside else Graphik.black
+            assert _rgb(display, (x, y)) == expected, (x, y)
+
+
+def test_draw_text_centered_on_a_surface_corner_paints_the_visible_part():
+    # The drawText counterpart of the test above: centered on the top-left
+    # corner, three quarters of the text falls off the surface, and the
+    # quarter that remains must still be painted rather than the call raising
+    # or the text being nudged back on-surface.
+    graphik = _make_graphik((40, 40))
+    display = graphik.getGameDisplay()
+    display.fill(Graphik.black)
+
+    graphik.drawText("W", 0, 0, 24, Graphik.white)
+
+    ink = [(x, y) for x in range(40) for y in range(40) if _rgb(display, (x, y)) != Graphik.black]
+    assert ink, "nothing was painted"
+    # Centered on (0, 0), only the bottom-right quarter of the text's rect is
+    # on the surface. Text shifted to fit would put its whole rect there, and
+    # its ink would reach past that quarter.
+    width, height = pygame.font.Font("freesansbold.ttf", 24).size("W")
+    assert max(x for x, _ in ink) < width - width // 2
+    assert max(y for _, y in ink) < height - height // 2
+
+
 def test_draw_button_draws_box_with_given_color():
     graphik = _make_graphik((40, 40))
     display = graphik.getGameDisplay()

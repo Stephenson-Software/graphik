@@ -16,6 +16,8 @@ class Graphik:
     Anchoring is not uniform across the draw methods: drawRectangle,
     drawButton and drawImage position their top-left corner at the given
     ``(xpos, ypos)``, while drawText centers the rendered text on it.
+    Positions need not lie on the surface: anything drawn across its edge
+    is clipped to it, with the part that falls off simply not painted.
 
     Example::
 
