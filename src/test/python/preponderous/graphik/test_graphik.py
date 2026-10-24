@@ -823,23 +823,25 @@ def test_draw_methods_render_to_the_bound_surface_not_the_display(draw, tmp_path
     assert all(_rgb(display, p) == Graphik.black for p in pixels), "the display was drawn to"
 
 
+def _draw_rectangle_at(graphik, imagePath, xpos, ypos):
+    graphik.drawRectangle(xpos, ypos, 10, 10, (0, 255, 0))
+
+
+def _draw_image_at(graphik, imagePath, xpos, ypos):
+    graphik.drawImage(str(imagePath), xpos, ypos, 10, 10)
+
+
+def _draw_button_at(graphik, imagePath, xpos, ypos):
+    # Empty label, so the whole box is the expected color.
+    graphik.drawButton(xpos, ypos, 10, 10, (0, 255, 0), Graphik.white, 10, "", lambda: None)
+
+
 @pytest.mark.parametrize(
     "draw",
     [
-        pytest.param(
-            lambda graphik, imagePath, xpos, ypos: graphik.drawRectangle(xpos, ypos, 10, 10, (0, 255, 0)),
-            id="drawRectangle",
-        ),
-        pytest.param(
-            lambda graphik, imagePath, xpos, ypos: graphik.drawImage(str(imagePath), xpos, ypos, 10, 10),
-            id="drawImage",
-        ),
-        pytest.param(
-            lambda graphik, imagePath, xpos, ypos: graphik.drawButton(
-                xpos, ypos, 10, 10, (0, 255, 0), Graphik.white, 10, "", lambda: None
-            ),
-            id="drawButton",
-        ),
+        pytest.param(_draw_rectangle_at, id="drawRectangle"),
+        pytest.param(_draw_image_at, id="drawImage"),
+        pytest.param(_draw_button_at, id="drawButton"),
     ],
 )
 @pytest.mark.parametrize(
