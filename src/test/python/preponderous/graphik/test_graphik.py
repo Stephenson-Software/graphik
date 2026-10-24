@@ -891,10 +891,12 @@ def test_draw_text_centered_on_a_surface_corner_paints_the_visible_part():
 
     ink = [(x, y) for x in range(40) for y in range(40) if _rgb(display, (x, y)) != Graphik.black]
     assert ink, "nothing was painted"
-    # A size-24 glyph is far taller and wider than 2 * 12 pixels, so text that
-    # had been shifted to fit would reach past the quadrant around the corner.
-    assert max(x for x, _ in ink) < 12
-    assert max(y for _, y in ink) < 12
+    # Centered on (0, 0), only the bottom-right quarter of the text's rect is
+    # on the surface. Text shifted to fit would put its whole rect there, and
+    # its ink would reach past that quarter.
+    width, height = pygame.font.Font("freesansbold.ttf", 24).size("W")
+    assert max(x for x, _ in ink) < width - width // 2
+    assert max(y for _, y in ink) < height - height // 2
 
 
 def test_draw_button_draws_box_with_given_color():
