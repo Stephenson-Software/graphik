@@ -1006,6 +1006,22 @@ def test_draw_button_with_a_degenerate_size_is_never_clickable(monkeypatch, box,
     assert not _click_at(monkeypatch, graphik, pos, box=box)
 
 
+@pytest.mark.parametrize("width, height", _ZERO_SIZES + _NEGATIVE_SIZES)
+def test_draw_button_with_a_degenerate_size_still_paints_its_label(width, height):
+    # Only the box disappears: the label is drawn by drawText regardless, so a
+    # degenerate button with a non-empty label still puts ink on the surface.
+    # The README says "draws no shape" rather than "draws nothing" for this.
+    graphik = _make_graphik((40, 40))
+    display = graphik.getGameDisplay()
+    display.fill(Graphik.black)
+
+    graphik.drawButton(20, 20, width, height, Graphik.blue, Graphik.white, 16, "W", lambda: None)
+
+    pixels = [(x, y) for x in range(40) for y in range(40)]
+    assert any(_rgb(display, p) != Graphik.black for p in pixels), "the label was not painted"
+    assert all(_rgb(display, p) != Graphik.blue for p in pixels), "a box was painted"
+
+
 def test_draw_button_draws_box_with_given_color():
     graphik = _make_graphik((40, 40))
     display = graphik.getGameDisplay()

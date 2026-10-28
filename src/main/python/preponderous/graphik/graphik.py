@@ -228,7 +228,7 @@ class Graphik:
             pygame.error: If the file exists but pygame cannot decode it, or
                 if no display mode has been set.
             ValueError: If ``width`` or ``height`` is negative. (A zero size
-                draws nothing, as it does in the other draw methods.)
+                does not raise; it draws nothing.)
         """
         # Loading decodes the file from disk and scaling resamples it, both of
         # which cost far more than the blit() they exist to serve, so cache
