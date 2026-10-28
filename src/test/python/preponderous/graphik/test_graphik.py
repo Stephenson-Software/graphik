@@ -899,6 +899,113 @@ def test_draw_text_centered_on_a_surface_corner_paints_the_visible_part():
     assert max(y for _, y in ink) < height - height // 2
 
 
+def _draw_rectangle_sized(graphik, imagePath, width, height):
+    graphik.drawRectangle(10, 10, width, height, (0, 255, 0))
+
+
+def _draw_image_sized(graphik, imagePath, width, height):
+    graphik.drawImage(str(imagePath), 10, 10, width, height)
+
+
+def _draw_button_sized(graphik, imagePath, width, height):
+    # Empty label, so only the box itself could paint anything.
+    graphik.drawButton(10, 10, width, height, (0, 255, 0), Graphik.white, 10, "", lambda: None)
+
+
+_ZERO_SIZES = [
+    pytest.param(0, 5, id="zero_width"),
+    pytest.param(5, 0, id="zero_height"),
+    pytest.param(0, 0, id="zero_both"),
+]
+
+_NEGATIVE_SIZES = [
+    pytest.param(-5, 5, id="negative_width"),
+    pytest.param(5, -5, id="negative_height"),
+    pytest.param(-5, -5, id="negative_both"),
+]
+
+
+def _paint_on_fresh_display(draw, width, height, tmp_path):
+    pygame.display.init()
+    pygame.font.init()
+    display = pygame.display.set_mode((20, 20))
+    display.fill(Graphik.black)
+    graphik = Graphik(display)
+
+    imagePath = tmp_path / "green.bmp"
+    _write_solid_image(imagePath, (0, 255, 0))
+
+    draw(graphik, imagePath, width, height)
+
+    return [(x, y) for x in range(20) for y in range(20) if _rgb(display, (x, y)) != Graphik.black]
+
+
+@pytest.mark.parametrize(
+    "draw",
+    [
+        pytest.param(_draw_rectangle_sized, id="drawRectangle"),
+        pytest.param(_draw_image_sized, id="drawImage"),
+        pytest.param(_draw_button_sized, id="drawButton"),
+    ],
+)
+@pytest.mark.parametrize("width, height", _ZERO_SIZES)
+def test_draw_methods_with_a_zero_size_paint_nothing(draw, width, height, tmp_path):
+    # Consumers size boxes from computed layouts (a health bar at 0%, a list
+    # with no rows), which reach zero as a matter of course. A zero extent on
+    # either axis must leave the surface untouched without raising -- neither
+    # a one-pixel sliver from a closed range nor an error from the scaler.
+    assert _paint_on_fresh_display(draw, width, height, tmp_path) == []
+
+
+@pytest.mark.parametrize(
+    "draw",
+    [
+        pytest.param(_draw_rectangle_sized, id="drawRectangle"),
+        pytest.param(_draw_button_sized, id="drawButton"),
+    ],
+)
+@pytest.mark.parametrize("width, height", _NEGATIVE_SIZES)
+def test_draw_methods_with_a_negative_size_paint_nothing(draw, width, height, tmp_path):
+    # A negative extent is not mirrored back from (xpos, ypos) into a normal
+    # rectangle: nothing is painted and nothing raises. drawImage is the
+    # exception, pinned separately below.
+    assert _paint_on_fresh_display(draw, width, height, tmp_path) == []
+
+
+@pytest.mark.parametrize("width, height", _NEGATIVE_SIZES)
+def test_draw_image_with_a_negative_size_raises_value_error(width, height, tmp_path):
+    # Unlike drawRectangle and drawButton, which silently paint nothing, the
+    # scaler refuses a negative size. The docstring documents this, so a guard
+    # that quietly skips the draw instead would make the two disagree.
+    graphik = _make_graphik((20, 20))
+    imagePath = tmp_path / "green.bmp"
+    _write_solid_image(imagePath, (0, 255, 0))
+
+    with pytest.raises(ValueError):
+        graphik.drawImage(str(imagePath), 10, 10, width, height)
+
+
+@pytest.mark.parametrize(
+    "box, pos",
+    [
+        pytest.param((10, 10, 0, 20), (10, 15), id="zero_width"),
+        pytest.param((10, 10, 20, 0), (15, 10), id="zero_height"),
+        # A mirrored hit test would claim the region left of / above the
+        # anchor, so press there as well as on the anchor itself.
+        pytest.param((10, 10, -5, 20), (7, 15), id="negative_width"),
+        pytest.param((10, 10, 20, -5), (15, 7), id="negative_height"),
+        pytest.param((10, 10, -5, -5), (10, 10), id="negative_both_at_anchor"),
+    ],
+)
+def test_draw_button_with_a_degenerate_size_is_never_clickable(monkeypatch, box, pos):
+    # The clickable region is documented as exactly the drawn box, and the
+    # tests above pin that a zero or negative size draws no box -- so such a
+    # button must have no clickable coordinate either, rather than one at its
+    # anchor or a mirrored region the user cannot see.
+    graphik = _make_graphik((40, 40))
+    assert not _click_at(monkeypatch, graphik, pos, box=box)
+
+
 def test_draw_button_draws_box_with_given_color():
     graphik = _make_graphik((40, 40))
     display = graphik.getGameDisplay()
