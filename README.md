@@ -41,6 +41,8 @@ Public `Graphik` methods:
 
 Positions passed to the draw methods need not lie on the surface: anything drawn across its edge (including at negative coordinates) is clipped to it, with the part that falls off simply not painted — nothing raises, and nothing is shifted to fit.
 
+A zero `width` or `height` draws no shape and raises nothing, and a `drawButton` sized that way has no clickable region (its label, if non-empty, is still painted, centered on `xpos + width // 2`, `ypos + height // 2`). A negative size is not mirrored into a normal rectangle: `drawRectangle` and `drawButton` likewise draw no shape (with no clickable region), but `drawImage` raises `ValueError`.
+
 Color constants: `Graphik.black`, `Graphik.white`, `Graphik.red`, `Graphik.green`, `Graphik.blue`.
 
 ## Dependencies

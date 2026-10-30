@@ -14,8 +14,9 @@ permissions:
 
 jobs:
   test:
-    name: Compile and test
-    runs-on: ubuntu-latest
+    # Named by interpreter alone, so the check names stay Compile and test (3.9) etc.
+    name: Compile and test (${{ matrix.python-version }})
+    runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
@@ -25,7 +26,13 @@ jobs:
         # from-source build that fails on the runner (missing SDL/freetype
         # dev headers), so the declared floor and the tested floor must
         # stay in lockstep.
-        python-version: ["3.9", "3.10", "3.11", "3.12", "3.13"]
+        python-version: ["3.10", "3.11", "3.12", "3.13"]
+        os: [ubuntu-latest]
+        include:
+          # setup-python publishes no 3.9 build for the Ubuntu 26.04 image
+          # ubuntu-latest now resolves to, so the 3.9 floor is pinned.
+          - python-version: "3.9"
+            os: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
 
