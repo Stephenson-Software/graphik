@@ -43,6 +43,8 @@ Positions passed to the draw methods need not lie on the surface: anything drawn
 
 A zero `width` or `height` draws no shape and raises nothing, and a `drawButton` sized that way has no clickable region (its label, if non-empty, is still painted, centered on `xpos + width // 2`, `ypos + height // 2`). A negative size is not mirrored into a normal rectangle: `drawRectangle` and `drawButton` likewise draw no shape (with no clickable region), but `drawImage` raises `ValueError`.
 
+Fractional positions and sizes are accepted: `drawRectangle`, `drawButton` and `drawImage` truncate each of `xpos`, `ypos`, `width` and `height` toward zero on its own, so a box at `10.7` with a width of `5.9` covers pixels 10 through 14, and a size below one pixel draws nothing. `drawText` accepts a fractional center, but its `size` must be an `int` (a float raises `TypeError`). `drawButton`'s hit test compares the mouse against the unrounded values, so with fractional arguments its clickable region can be up to a pixel off from the drawn box on each edge; pass integers where the two must line up exactly.
+
 Color constants: `Graphik.black`, `Graphik.white`, `Graphik.red`, `Graphik.green`, `Graphik.blue`.
 
 ## Dependencies

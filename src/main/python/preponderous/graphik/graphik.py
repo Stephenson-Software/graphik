@@ -18,6 +18,8 @@ class Graphik:
     ``(xpos, ypos)``, while drawText centers the rendered text on it.
     Positions need not lie on the surface: anything drawn across its edge
     is clipped to it, with the part that falls off simply not painted.
+    Fractional positions and sizes are accepted and truncated toward zero,
+    except drawText's font size, which must be an int.
 
     Example::
 
@@ -131,8 +133,9 @@ class Graphik:
             text: The string to render.
             xpos: X coordinate the text is centered on, in pixels.
             ypos: Y coordinate the text is centered on, in pixels.
-            size: Font size in points. The font module is initialized on
-                demand, and one font per distinct size is cached and reused.
+            size: Font size in points, as an ``int`` (a float raises
+                ``TypeError``). The font module is initialized on demand, and
+                one font per distinct size is cached and reused.
             color: Text color as an ``(r, g, b)`` tuple.
         """
         myFont = self._getFont(size)
@@ -153,7 +156,10 @@ class Graphik:
         ``xpos`` through ``xpos + width - 1`` horizontally, and ``ypos``
         through ``ypos + height - 1`` vertically. Buttons laid out edge to
         edge therefore share no clickable coordinate -- a boundary belongs to
-        the button whose left/top edge sits on it.
+        the button whose left/top edge sits on it. This holds for integer
+        arguments: the box is painted with each argument truncated, but the
+        hit test uses the unrounded values, so fractional ones can shift the
+        clickable region up to a pixel from the drawn box on each edge.
 
         The hit test reads ``pygame.mouse.get_pos()``, which is relative to
         the window, and compares it against ``(xpos, ypos)`` unchanged. The
