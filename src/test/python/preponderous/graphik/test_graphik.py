@@ -1022,6 +1022,137 @@ def test_draw_button_with_a_degenerate_size_still_paints_its_label(width, height
     assert all(_rgb(display, p) != Graphik.blue for p in pixels), "a box was painted"
 
 
+def _draw_rectangle_box(graphik, imagePath, xpos, ypos, width, height):
+    graphik.drawRectangle(xpos, ypos, width, height, (0, 255, 0))
+
+
+def _draw_image_box(graphik, imagePath, xpos, ypos, width, height):
+    graphik.drawImage(str(imagePath), xpos, ypos, width, height)
+
+
+def _draw_button_box(graphik, imagePath, xpos, ypos, width, height):
+    # Empty label, so the whole box is the expected color.
+    graphik.drawButton(xpos, ypos, width, height, (0, 255, 0), Graphik.white, 10, "", lambda: None)
+
+
+@pytest.mark.parametrize(
+    "draw",
+    [
+        pytest.param(_draw_rectangle_box, id="drawRectangle"),
+        pytest.param(_draw_image_box, id="drawImage"),
+        pytest.param(_draw_button_box, id="drawButton"),
+    ],
+)
+@pytest.mark.parametrize(
+    "box",
+    [
+        pytest.param((10.7, 10.2, 5.9, 5.5), id="fractions_above_half"),
+        pytest.param((10.2, 10.7, 5.5, 5.9), id="fractions_below_half"),
+        pytest.param((10.5, 10.5, 5.5, 5.5), id="exact_halves"),
+    ],
+)
+def test_draw_methods_truncate_fractional_positions_and_sizes(draw, box, tmp_path):
+    # Consumers derive positions and sizes from divisions (a grid cell is
+    # displayWidth / columns), so floats reach these methods routinely. Each
+    # argument is truncated toward zero on its own -- not rounded, and the
+    # far edge is not computed from the unrounded xpos + width -- so every box
+    # here covers pixels 10..14 on both axes. Pinned on pygame 2.1.2 and 2.6.1.
+    pygame.display.init()
+    pygame.font.init()
+    display = pygame.display.set_mode((20, 20))
+    display.fill(Graphik.black)
+    graphik = Graphik(display)
+
+    imagePath = tmp_path / "green.bmp"
+    _write_solid_image(imagePath, (0, 255, 0))
+
+    draw(graphik, imagePath, *box)
+
+    for x in range(20):
+        for y in range(20):
+            inside = 10 <= x < 15 and 10 <= y < 15
+            expected = (0, 255, 0) if inside else Graphik.black
+            assert _rgb(display, (x, y)) == expected, (x, y)
+
+
+@pytest.mark.parametrize(
+    "draw",
+    [
+        pytest.param(_draw_rectangle_box, id="drawRectangle"),
+        pytest.param(_draw_image_box, id="drawImage"),
+        pytest.param(_draw_button_box, id="drawButton"),
+    ],
+)
+def test_draw_methods_with_a_sub_pixel_size_paint_nothing(draw, tmp_path):
+    # Truncation makes a size below one pixel a zero size, so it paints
+    # nothing and raises nothing, exactly like the zero sizes pinned above.
+    pygame.display.init()
+    pygame.font.init()
+    display = pygame.display.set_mode((20, 20))
+    display.fill(Graphik.black)
+    graphik = Graphik(display)
+
+    imagePath = tmp_path / "green.bmp"
+    _write_solid_image(imagePath, (0, 255, 0))
+
+    draw(graphik, imagePath, 10.5, 10.5, 0.5, 0.5)
+
+    assert all(_rgb(display, (x, y)) == Graphik.black for x in range(20) for y in range(20))
+
+
+def test_draw_text_accepts_a_fractional_center():
+    graphik = _make_graphik((40, 40))
+    display = graphik.getGameDisplay()
+    display.fill(Graphik.black)
+
+    graphik.drawText("W", 20.5, 20.5, 16, Graphik.white)
+
+    assert any(_rgb(display, (x, y)) != Graphik.black for x in range(40) for y in range(40))
+
+
+def test_draw_text_rejects_a_fractional_size():
+    # Unlike the coordinates, the font size is handed to pygame.font.Font,
+    # which refuses a float. A consumer computing it as height / 10 must
+    # convert it to an int first.
+    graphik = _make_graphik((40, 40))
+
+    with pytest.raises(TypeError):
+        graphik.drawText("W", 20, 20, 16.5, Graphik.white)
+
+
+@pytest.mark.parametrize(
+    "pos, painted, expect_call",
+    [
+        # The box at (10.5, 10.5) sized 10.5 x 10.5 is painted over pixels
+        # 10..19 (each argument truncated), but the hit test compares the raw
+        # floats, so the clickable range on each axis is 11..20.
+        pytest.param((15, 15), True, True, id="interior"),
+        pytest.param((10, 15), True, False, id="painted_left_edge_not_clickable"),
+        pytest.param((15, 10), True, False, id="painted_top_edge_not_clickable"),
+        pytest.param((20, 15), False, True, id="unpainted_column_right_of_box_clickable"),
+        pytest.param((15, 20), False, True, id="unpainted_row_below_box_clickable"),
+    ],
+)
+def test_draw_button_with_fractional_bounds_hit_tests_the_unrounded_box(monkeypatch, pos, painted, expect_call):
+    # Characterizes current behavior: the documented "clickable region is
+    # exactly the drawn box" holds only for integer arguments. The painted
+    # box truncates each argument, while the hit test compares the mouse
+    # against the unrounded xpos..xpos + width, so the two drift apart by up
+    # to a pixel on each edge.
+    graphik = _make_graphik((40, 40))
+    display = graphik.getGameDisplay()
+    display.fill(Graphik.black)
+    calls = []
+    monkeypatch.setattr(pygame.mouse, "get_pos", lambda: pos)
+    monkeypatch.setattr(pygame.mouse, "get_pressed", lambda: (1, 0, 0))
+
+    # Empty label, so the label cannot paint over the pixels inspected below.
+    graphik.drawButton(10.5, 10.5, 10.5, 10.5, Graphik.blue, Graphik.white, 10, "", lambda: calls.append(True))
+
+    assert bool(calls) == expect_call
+    assert (_rgb(display, pos) == Graphik.blue) == painted
+
+
 def test_draw_button_draws_box_with_given_color():
     graphik = _make_graphik((40, 40))
     display = graphik.getGameDisplay()
