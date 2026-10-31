@@ -18,7 +18,8 @@ class Graphik:
     ``(xpos, ypos)``, while drawText centers the rendered text on it.
     Positions need not lie on the surface: anything drawn across its edge
     is clipped to it, with the part that falls off simply not painted.
-    Fractional positions and sizes are accepted and truncated toward zero.
+    Fractional positions and sizes are accepted and truncated toward zero,
+    except drawText's font size, which must be an int.
 
     Example::
 

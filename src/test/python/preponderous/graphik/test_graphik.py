@@ -1046,8 +1046,8 @@ def _draw_button_box(graphik, imagePath, xpos, ypos, width, height):
 @pytest.mark.parametrize(
     "box",
     [
-        pytest.param((10.7, 10.2, 5.9, 5.5), id="fractions_above_half"),
-        pytest.param((10.2, 10.7, 5.5, 5.9), id="fractions_below_half"),
+        pytest.param((10.7, 10.2, 5.9, 5.5), id="x_axis_above_half_y_axis_below"),
+        pytest.param((10.2, 10.7, 5.5, 5.9), id="x_axis_below_half_y_axis_above"),
         pytest.param((10.5, 10.5, 5.5, 5.5), id="exact_halves"),
     ],
 )
