@@ -129,6 +129,9 @@ class Graphik:
         Note that ``(xpos, ypos)`` is the *center* of the rendered text, not
         its top-left corner as in drawRectangle, drawButton and drawImage.
 
+        Glyph edges are antialiased, blending with whatever is already on the
+        surface, so a pixel-exact check should expect colors besides ``color``.
+
         Args:
             text: The string to render.
             xpos: X coordinate the text is centered on, in pixels.
