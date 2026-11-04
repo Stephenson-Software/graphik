@@ -81,6 +81,20 @@ def test_game_display_attribute_is_the_bound_surface(supplied):
     assert graphik.gameDisplay is graphik.getGameDisplay()
 
 
+def test_get_game_display_returns_an_off_screen_bound_surface():
+    # getGameDisplay() returns what the instance was bound to, which is not
+    # always the display. Every other test of it binds the display itself,
+    # where pygame.display.get_surface() would be indistinguishable.
+    pygame.display.init()
+    display = pygame.display.set_mode((10, 10))
+    surface = pygame.Surface((10, 10))
+
+    graphik = Graphik(surface)
+
+    assert graphik.getGameDisplay() is surface
+    assert graphik.getGameDisplay() is not display
+
+
 def test_color_constants_are_reachable():
     # The color constants used to be assigned only in an unreachable __init__;
     # they must now be present on both the class and any instance.
@@ -589,6 +603,21 @@ def test_draw_text_renders_in_the_requested_color():
     assert Graphik.red in inked
     # No pixel picked up a green or blue component the requested color lacks.
     assert all(g == 0 and b == 0 for _, g, b in inked)
+
+
+def test_draw_text_antialiases_the_glyph_edges():
+    # Aliased rendering would leave only two colors on the surface, the text
+    # color and the background, and every other text test would still pass.
+    graphik = _make_graphik((100, 100))
+    display = graphik.getGameDisplay()
+    display.fill(Graphik.black)
+
+    graphik.drawText("W", 50, 50, 40, Graphik.white)
+
+    width, height = display.get_size()
+    colors = {_rgb(display, (x, y)) for x in range(width) for y in range(height)}
+    assert Graphik.white in colors
+    assert colors - {Graphik.black, Graphik.white}, "no blended edge pixels"
 
 
 def test_draw_text_leaves_the_surface_visible_around_the_glyphs():
@@ -1203,6 +1232,25 @@ def test_draw_button_centers_the_label_within_the_box():
     # only the horizontal midpoint is asserted tightly, because glyph ink is
     # vertically asymmetric within the rect that is actually centered.
     assert abs((min(xs) + max(xs)) / 2 - centerX) <= 1
+
+
+def test_draw_button_centers_the_label_using_floor_division():
+    # The README gives the label's center as xpos + width // 2. With a
+    # fractional position and an odd size, true division lands a pixel away,
+    # which integer arguments (and the test above) cannot show.
+    graphik = _make_graphik((200, 100))
+    display = graphik.getGameDisplay()
+    xpos, ypos, width, height = 10.5, 20.5, 101, 51
+
+    # The box matches the background, so only the label can differ.
+    display.fill(Graphik.black)
+    graphik.drawButton(xpos, ypos, width, height, Graphik.black, Graphik.white, 20, "Hi", lambda: None)
+    fromButton = pygame.image.tostring(display, "RGB")
+
+    display.fill(Graphik.black)
+    graphik.drawText("Hi", xpos + width // 2, ypos + height // 2, 20, Graphik.white)
+
+    assert fromButton == pygame.image.tostring(display, "RGB")
 
 
 def test_draw_button_renders_the_label_in_color_text():
