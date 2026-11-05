@@ -864,8 +864,8 @@ def test_draw_methods_render_to_the_bound_surface_not_the_display(draw, tmp_path
 )
 def test_draw_methods_leave_presenting_the_display_to_the_caller(draw, monkeypatch, tmp_path):
     # The class docstring and the README both say no method presents the
-    # display. Consumers batch a frame's draws and present once, so a draw
-    # method that did it itself would flicker half-drawn frames at them.
+    # display. A frame is usually several draws, so a draw method that did it
+    # itself would show the window a half-drawn frame.
     graphik = _make_graphik((20, 20))
     imagePath = tmp_path / "green.bmp"
     _write_solid_image(imagePath, (0, 255, 0))
