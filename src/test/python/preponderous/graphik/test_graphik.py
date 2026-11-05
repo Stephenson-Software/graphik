@@ -881,7 +881,7 @@ def test_draw_methods_leave_presenting_the_display_to_the_caller(draw, monkeypat
 
 def test_readme_usage_example_runs_and_presents_what_it_draws(monkeypatch, tmp_path):
     # The Usage block is the first code a reader copies. Run it as written, apart
-    # from the placeholder image path, with one QUIT queued so its loop ends.
+    # from the placeholder image path, with QUIT reported so its loop ends.
     readmePath = os.path.join(_SRC_MAIN, "..", "..", "..", "README.md")
     with open(readmePath, encoding="utf-8") as readme:
         example = re.search(r"## Usage\n```python\n(.*?)```", readme.read(), re.DOTALL).group(1)
