@@ -24,11 +24,23 @@ pygame.init()
 gameDisplay = pygame.display.set_mode((900, 600))
 graphik = Graphik(gameDisplay)
 
-graphik.drawRectangle(100, 100, 200, 50, Graphik.blue)
-graphik.drawText("Hello, world!", 200, 125, 24, Graphik.white)
-graphik.drawButton(100, 200, 200, 50, Graphik.green, Graphik.black, 24, "Click me", lambda: print("clicked"))
-graphik.drawImage("path/to/image.png", 100, 300, 200, 200)
+running = True
+while running:
+    for event in pygame.event.get():
+        if event.type == pygame.QUIT:
+            running = False
+
+    gameDisplay.fill(Graphik.black)
+    graphik.drawRectangle(100, 100, 200, 50, Graphik.blue)
+    graphik.drawText("Hello, world!", 200, 125, 24, Graphik.white)
+    graphik.drawButton(100, 200, 200, 50, Graphik.green, Graphik.black, 24, "Click me", lambda: print("clicked"))
+    graphik.drawImage("path/to/image.png", 100, 300, 200, 200)  # replace with a real image file
+    pygame.display.update()
+
+pygame.quit()
 ```
+
+`Graphik` only paints the surface: nothing appears in the window until `pygame.display.update()` (or `pygame.display.flip()`) is called, and no `Graphik` method calls either. `drawButton` reads the mouse state, which pygame refreshes only while events are being processed, so it belongs in a loop that handles them, as above.
 
 Public `Graphik` methods:
 - `Graphik(gameDisplay=None)` — construct a helper bound to a pygame display surface (creates a default 900x600 window if none is given — replacing, not reusing, any display mode already set, so an existing window is resized to 900x600).

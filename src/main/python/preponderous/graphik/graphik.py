@@ -13,6 +13,10 @@ class Graphik:
     measured from the top-left of that surface, and colors are ``(r, g, b)``
     tuples -- the constants below cover the common cases.
 
+    Drawing only paints that surface: nothing appears in the window until the
+    caller presents it with ``pygame.display.update()``, which no method here
+    does.
+
     Anchoring is not uniform across the draw methods: drawRectangle,
     drawButton and drawImage position their top-left corner at the given
     ``(xpos, ypos)``, while drawText centers the rendered text on it.
@@ -29,6 +33,7 @@ class Graphik:
         pygame.init()
         graphik = Graphik(pygame.display.set_mode((900, 600)))
         graphik.drawRectangle(100, 100, 200, 50, Graphik.blue)
+        pygame.display.update()
     """
 
     # Color constants, reachable as Graphik.white or instance.white, etc.
