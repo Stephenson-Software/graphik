@@ -1,4 +1,5 @@
 import os
+import re
 import subprocess
 import sys
 
@@ -850,6 +851,63 @@ def test_draw_methods_render_to_the_bound_surface_not_the_display(draw, tmp_path
     pixels = [(x, y) for x in range(20) for y in range(20)]
     assert any(_rgb(target, p) != Graphik.black for p in pixels), "nothing was drawn to the bound surface"
     assert all(_rgb(display, p) == Graphik.black for p in pixels), "the display was drawn to"
+
+
+@pytest.mark.parametrize(
+    "draw",
+    [
+        pytest.param(_draw_rectangle, id="drawRectangle"),
+        pytest.param(_draw_text, id="drawText"),
+        pytest.param(_draw_button, id="drawButton"),
+        pytest.param(_draw_image, id="drawImage"),
+    ],
+)
+def test_draw_methods_leave_presenting_the_display_to_the_caller(draw, monkeypatch, tmp_path):
+    # The class docstring and the README both say no method presents the
+    # display. Consumers batch a frame's draws and present once, so a draw
+    # method that did it itself would flicker half-drawn frames at them.
+    graphik = _make_graphik((20, 20))
+    imagePath = tmp_path / "green.bmp"
+    _write_solid_image(imagePath, (0, 255, 0))
+
+    presented = []
+    monkeypatch.setattr(pygame.display, "update", lambda *args: presented.append("update"))
+    monkeypatch.setattr(pygame.display, "flip", lambda: presented.append("flip"))
+
+    draw(graphik, imagePath)
+
+    assert presented == []
+
+
+def test_readme_usage_example_runs_and_presents_what_it_draws(monkeypatch, tmp_path):
+    # The Usage block is the first code a reader copies. Run it as written, apart
+    # from the placeholder image path, with one QUIT queued so its loop ends.
+    readmePath = os.path.join(_SRC_MAIN, "..", "..", "..", "README.md")
+    with open(readmePath, encoding="utf-8") as readme:
+        example = re.search(r"## Usage\n```python\n(.*?)```", readme.read(), re.DOTALL).group(1)
+
+    imagePath = tmp_path / "green.bmp"
+    _write_solid_image(imagePath, (0, 255, 0))
+    assert "path/to/image.png" in example
+    example = example.replace("path/to/image.png", imagePath.as_posix())
+
+    monkeypatch.setattr(pygame.event, "get", lambda: [pygame.event.Event(pygame.QUIT)])
+
+    presented = []
+
+    def recordFrame():
+        # Sampled here because the example ends by quitting pygame, which frees
+        # the display. Failing rather than returning also stops a loop that has
+        # lost its QUIT handling from running forever.
+        if presented:
+            pytest.fail("the example kept looping after QUIT")
+        presented.append(_rgb(pygame.display.get_surface(), (105, 105)))
+
+    monkeypatch.setattr(pygame.display, "update", recordFrame)
+
+    exec(example, {})
+
+    assert presented == [Graphik.blue]
 
 
 def _draw_rectangle_at(graphik, imagePath, xpos, ypos):
