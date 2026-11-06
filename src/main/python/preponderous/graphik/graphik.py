@@ -23,7 +23,7 @@ class Graphik:
     Positions need not lie on the surface: anything drawn across its edge
     is clipped to it, with the part that falls off simply not painted.
     Fractional positions and sizes are accepted and truncated toward zero,
-    except drawText's font size, which must be an int.
+    except the font size of drawText and drawButton, which must be an int.
 
     Example::
 
@@ -115,6 +115,10 @@ class Graphik:
         # rebuild. (A resize returns the same surface, so this does not
         # discard the cache on every set_mode.)
         #
+        # With no display mode set there is no such object: get_surface() is
+        # None on both sides of a restart, so nothing built then can be
+        # trusted on a later call, and the font is not cached at all.
+        #
         # Not covered: a consumer that calls pygame.font.quit() followed by
         # pygame.font.init() itself, leaving the display alone -- pygame
         # exposes nothing that distinguishes that from an untouched module.
@@ -123,6 +127,9 @@ class Graphik:
         if display is not self._fontDisplay:
             self._fonts.clear()
             self._fontDisplay = display
+
+        if display is None:
+            return pygame.font.Font('freesansbold.ttf', size)
 
         if size not in self._fonts:
             self._fonts[size] = pygame.font.Font('freesansbold.ttf', size)
@@ -143,7 +150,9 @@ class Graphik:
             ypos: Y coordinate the text is centered on, in pixels.
             size: Font size in points, as an ``int`` (a float raises
                 ``TypeError``). The font module is initialized on demand, and
-                one font per distinct size is cached and reused.
+                one font per distinct size is cached and reused while a
+                display mode is set; with none set, the font is rebuilt on
+                every call.
             color: Text color as an ``(r, g, b)`` tuple.
         """
         myFont = self._getFont(size)
@@ -178,6 +187,12 @@ class Graphik:
         surface's position but stays clickable at ``(xpos, ypos)`` in window
         coordinates.
 
+        Reading the mouse needs the video system, so unlike drawRectangle and
+        drawText this raises ``pygame.error`` when neither ``pygame.init()``
+        nor ``pygame.display.init()`` has been called, even for an off-screen
+        surface. No display mode is needed. The box and label are painted
+        before the error is raised.
+
         Args:
             xpos: X coordinate of the box's left edge, in pixels.
             ypos: Y coordinate of the box's top edge, in pixels.
@@ -185,7 +200,9 @@ class Graphik:
             height: Height of the box, in pixels.
             colorBox: Fill color of the box as an ``(r, g, b)`` tuple.
             colorText: Color of the label as an ``(r, g, b)`` tuple.
-            sizeText: Font size of the label, in points.
+            sizeText: Font size of the label, in points, as an ``int``. A
+                float raises ``TypeError`` once the box is painted, before
+                the hit test, so ``function`` is not called.
             text: The label, centered on the box. It is not clipped to the
                 box: a label too large for it overflows past the box edges,
                 and the overflow is painted but not clickable.
