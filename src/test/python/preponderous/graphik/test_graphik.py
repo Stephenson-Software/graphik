@@ -1593,10 +1593,10 @@ def test_draw_button_hit_tests_in_window_coordinates_not_the_bound_surface(monke
 
 
 def test_draw_button_requires_the_video_system_even_for_an_off_screen_surface():
-    # Reading the mouse needs the video system, which the other draw methods
-    # never touch, so drawButton alone fails on a surface used with pygame
-    # entirely uninitialized -- after the box is painted. Initializing the
-    # video system is enough: no display mode is needed.
+    # Reading the mouse needs the video system, which drawRectangle and
+    # drawText never touch, so drawButton fails where they work: on a surface
+    # used with pygame entirely uninitialized -- after the box is painted.
+    # Initializing the video system is enough: no display mode is needed.
     pygame.quit()
     target = pygame.Surface((20, 20))
     target.fill(Graphik.black)
