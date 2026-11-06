@@ -745,6 +745,51 @@ def test_draw_text_drops_cached_font_when_the_display_session_changes(monkeypatc
     assert len(constructed) == 1
 
 
+def test_draw_text_skips_the_font_cache_while_no_display_mode_is_set(monkeypatch):
+    # With no display mode, get_surface() is None before and after a pygame
+    # restart, so the session check cannot see one. A font is therefore only
+    # cached once there is a display to compare against.
+    pygame.display.quit()
+    pygame.display.init()
+    pygame.font.init()
+    assert pygame.display.get_surface() is None
+    target = pygame.Surface((20, 20))
+    graphik = Graphik(target)
+    constructed = _count_font_constructions(monkeypatch)
+
+    graphik.drawText("A", 5, 5, 12, Graphik.white)
+    graphik.drawText("A", 5, 5, 12, Graphik.white)
+    assert len(constructed) == 2
+
+    pygame.display.set_mode((20, 20))
+    graphik.drawText("A", 5, 5, 12, Graphik.white)
+    graphik.drawText("A", 5, 5, 12, Graphik.white)
+    assert len(constructed) == 3
+
+
+def test_draw_text_survives_a_pygame_restart_with_no_display_mode():
+    # Run in a fresh interpreter because the failure this guards against is a
+    # segfault on some pygame versions, which would take the whole test run
+    # down with it.
+    code = (
+        "import pygame\n"
+        "from preponderous.graphik import Graphik\n"
+        "pygame.init()\n"
+        "graphik = Graphik(pygame.Surface((40, 40)))\n"
+        "graphik.drawText('A', 20, 20, 12, Graphik.white)\n"
+        "pygame.quit()\n"
+        "pygame.init()\n"
+        "graphik.drawText('A', 20, 20, 12, Graphik.white)\n"
+    )
+    result = subprocess.run(
+        [sys.executable, "-c", code],
+        capture_output=True,
+        text=True,
+        env=dict(os.environ, PYTHONPATH=_SRC_MAIN),
+    )
+    assert result.returncode == 0, result.stderr
+
+
 def test_draw_text_keeps_cached_font_across_a_display_resize(monkeypatch):
     # The session check compares display surface *objects*, and set_mode returns
     # the same object when only the size changes. That is what stops a resizable
@@ -1207,6 +1252,24 @@ def test_draw_text_rejects_a_fractional_size():
         graphik.drawText("W", 20, 20, 16.5, Graphik.white)
 
 
+def test_draw_button_rejects_a_fractional_text_size(monkeypatch):
+    # sizeText reaches pygame.font.Font through drawText, so the same rule
+    # applies. The box is painted first, and the hit test after the label is
+    # never reached, so a press inside the box does not fire the callback.
+    graphik = _make_graphik((40, 40))
+    display = graphik.getGameDisplay()
+    display.fill(Graphik.black)
+    calls = []
+    monkeypatch.setattr(pygame.mouse, "get_pos", lambda: (5, 5))
+    monkeypatch.setattr(pygame.mouse, "get_pressed", lambda: (1, 0, 0))
+
+    with pytest.raises(TypeError):
+        graphik.drawButton(0, 0, 40, 40, Graphik.blue, Graphik.white, 16.5, "Go", lambda: calls.append(True))
+
+    assert _rgb(display, (5, 5)) == Graphik.blue
+    assert calls == []
+
+
 @pytest.mark.parametrize(
     "pos, painted, expect_call",
     [
@@ -1527,3 +1590,23 @@ def test_draw_button_hit_tests_in_window_coordinates_not_the_bound_surface(monke
     # ...while a press over the unpainted window corner does.
     assert _click_at(monkeypatch, graphik, (2, 2), box=box)
     assert _rgb(display, (2, 2)) == Graphik.black
+
+
+def test_draw_button_requires_the_video_system_even_for_an_off_screen_surface():
+    # Reading the mouse needs the video system, which drawRectangle and
+    # drawText never touch, so drawButton fails where they work: on a surface
+    # used with pygame entirely uninitialized -- after the box is painted.
+    # Initializing the video system is enough: no display mode is needed.
+    pygame.quit()
+    target = pygame.Surface((20, 20))
+    target.fill(Graphik.black)
+    graphik = Graphik(target)
+
+    with pytest.raises(pygame.error):
+        graphik.drawButton(0, 0, 20, 20, Graphik.blue, Graphik.white, 6, "", lambda: None)
+    assert _rgb(target, (5, 5)) == Graphik.blue
+
+    pygame.display.init()
+    assert pygame.display.get_surface() is None
+    graphik.drawButton(0, 0, 20, 20, Graphik.green, Graphik.white, 6, "", lambda: None)
+    assert _rgb(target, (5, 5)) == Graphik.green
