@@ -281,6 +281,31 @@ def _count_image_scales(monkeypatch):
     return scaled
 
 
+def test_draw_image_needs_a_display_mode_only_for_the_first_load_of_a_path(tmp_path):
+    # The display-format conversion happens alongside the load, so a cached
+    # path never reaches it again.
+    pygame.display.init()
+    pygame.display.set_mode((10, 10))
+    target = pygame.Surface((20, 20))
+    target.fill(Graphik.black)
+    graphik = Graphik(target)
+    cachedPath = tmp_path / "cached.bmp"
+    otherPath = tmp_path / "other.bmp"
+    _write_solid_image(cachedPath, (255, 0, 0))
+    _write_solid_image(otherPath, (0, 255, 0))
+    graphik.drawImage(str(cachedPath), 0, 0, 5, 5)
+    target.fill(Graphik.black)
+
+    pygame.display.quit()
+    pygame.display.init()
+    assert pygame.display.get_surface() is None
+
+    graphik.drawImage(str(cachedPath), 0, 0, 5, 5)
+    assert _rgb(target, (2, 2)) == (255, 0, 0)
+    with pytest.raises(pygame.error):
+        graphik.drawImage(str(otherPath), 10, 10, 5, 5)
+
+
 def test_draw_image_reuses_loaded_surface_across_calls(monkeypatch, tmp_path):
     graphik = _make_graphik()
     image_path = tmp_path / "red.bmp"
@@ -790,6 +815,77 @@ def test_draw_text_survives_a_pygame_restart_with_no_display_mode():
     assert result.returncode == 0, result.stderr
 
 
+@pytest.mark.parametrize("surface", ["display", "subsurface"])
+def test_drawing_to_a_destroyed_surface_fails_after_a_pygame_restart(surface):
+    # Run in a fresh interpreter because on some pygame versions the failure
+    # is a segfault rather than an exception. The docs promise only that this
+    # must not be done, so any nonzero exit satisfies them; a clean exit would
+    # mean the documented hazard is gone and the docs need revisiting.
+    bound = {"display": "display", "subsurface": "display.subsurface((0, 0, 10, 10))"}[surface]
+    code = (
+        "import pygame\n"
+        "from preponderous.graphik import Graphik\n"
+        "pygame.init()\n"
+        "display = pygame.display.set_mode((40, 40))\n"
+        f"graphik = Graphik({bound})\n"
+        "pygame.quit()\n"
+        "pygame.init()\n"
+        "graphik.drawRectangle(0, 0, 5, 5, Graphik.red)\n"
+    )
+    result = subprocess.run(
+        [sys.executable, "-c", code],
+        capture_output=True,
+        text=True,
+        env=dict(os.environ, PYTHONPATH=_SRC_MAIN),
+    )
+    assert result.returncode != 0, result.stderr
+
+
+def test_rebinding_game_display_restores_every_draw_method_after_a_restart(tmp_path):
+    # The recovery the docs name for a destroyed display. Each draw method
+    # paints a pixel of its own, and the font and image caches built before
+    # the restart must not get in the way.
+    graphik = _make_graphik((40, 40))
+    imagePath = tmp_path / "red.bmp"
+    _write_solid_image(imagePath, (255, 0, 0))
+    graphik.drawText("W", 20, 20, 16, Graphik.white)
+    graphik.drawImage(str(imagePath), 0, 0, 5, 5)
+
+    pygame.quit()
+    pygame.init()
+    display = pygame.display.set_mode((40, 40))
+    display.fill(Graphik.black)
+    graphik.gameDisplay = display
+
+    graphik.drawRectangle(0, 0, 5, 5, Graphik.green)
+    graphik.drawImage(str(imagePath), 5, 0, 5, 5)
+    graphik.drawButton(10, 0, 5, 5, Graphik.blue, Graphik.white, 1, "", lambda: None)
+    graphik.drawText("W", 20, 25, 16, Graphik.white)
+
+    assert _rgb(display, (2, 2)) == Graphik.green
+    assert _rgb(display, (7, 2)) == (255, 0, 0)
+    assert _rgb(display, (12, 2)) == Graphik.blue
+    assert any(_rgb(display, (x, y)) != Graphik.black for x in range(40) for y in range(15, 40))
+
+
+def test_off_screen_surface_keeps_drawing_across_a_pygame_restart():
+    # Only the display and its subsurfaces are destroyed by pygame.quit().
+    pygame.init()
+    target = pygame.Surface((40, 40))
+    target.fill(Graphik.black)
+    graphik = Graphik(target)
+
+    pygame.quit()
+    pygame.init()
+    graphik.drawRectangle(0, 0, 5, 5, Graphik.green)
+    graphik.drawText("W", 20, 25, 16, Graphik.white)
+    graphik.drawButton(10, 0, 5, 5, Graphik.blue, Graphik.white, 1, "", lambda: None)
+
+    assert _rgb(target, (2, 2)) == Graphik.green
+    assert _rgb(target, (12, 2)) == Graphik.blue
+    assert any(_rgb(target, (x, y)) != Graphik.black for x in range(40) for y in range(15, 40))
+
+
 def test_draw_text_keeps_cached_font_across_a_display_resize(monkeypatch):
     # The session check compares display surface *objects*, and set_mode returns
     # the same object when only the size changes. That is what stops a resizable
@@ -1250,6 +1346,23 @@ def test_draw_text_rejects_a_fractional_size():
 
     with pytest.raises(TypeError):
         graphik.drawText("W", 20, 20, 16.5, Graphik.white)
+
+
+def test_draw_text_accepts_a_whole_float_size_only_once_its_font_is_cached(monkeypatch):
+    # Characterization, not endorsement: 16.0 hashes and compares equal to 16,
+    # so the font cache answers before pygame.font.Font can refuse the float.
+    # The same call therefore raises or succeeds depending on what was drawn
+    # earlier. Documented as it stands, because making it raise could break a
+    # caller that works today.
+    graphik = _make_graphik((40, 40))
+    with pytest.raises(TypeError):
+        graphik.drawText("W", 20, 20, 16.0, Graphik.white)
+
+    graphik.drawText("W", 20, 20, 16, Graphik.white)
+    constructed = _count_font_constructions(monkeypatch)
+    graphik.drawText("W", 20, 20, 16.0, Graphik.white)
+
+    assert constructed == []
 
 
 def test_draw_button_rejects_a_fractional_text_size(monkeypatch):
