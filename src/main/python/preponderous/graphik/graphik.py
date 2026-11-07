@@ -25,6 +25,13 @@ class Graphik:
     Fractional positions and sizes are accepted and truncated toward zero,
     except the font size of drawText and drawButton, which must be an int.
 
+    ``pygame.quit()`` destroys the display surface and any subsurface of it,
+    so an instance bound to either must not draw again until a live surface
+    is assigned to its ``gameDisplay`` attribute (or a new Graphik is built).
+    The failure depends on the pygame version and need not be an exception:
+    on pygame 2.1.2 drawRectangle segfaults the process. An instance bound to
+    an ordinary off-screen surface keeps working across a restart.
+
     Example::
 
         import pygame
@@ -149,8 +156,10 @@ class Graphik:
             xpos: X coordinate the text is centered on, in pixels.
             ypos: Y coordinate the text is centered on, in pixels.
             size: Font size in points, as an ``int`` (a float raises
-                ``TypeError``). The font module is initialized on demand, and
-                one font per distinct size is cached and reused while a
+                ``TypeError``, except that a whole-number float such as
+                ``24.0`` is served from the cache if a font of that size is
+                already cached). The font module is initialized on demand,
+                and one font per distinct size is cached and reused while a
                 display mode is set; with none set, the font is rebuilt on
                 every call.
             color: Text color as an ``(r, g, b)`` tuple.
@@ -202,7 +211,9 @@ class Graphik:
             colorText: Color of the label as an ``(r, g, b)`` tuple.
             sizeText: Font size of the label, in points, as an ``int``. A
                 float raises ``TypeError`` once the box is painted, before
-                the hit test, so ``function`` is not called.
+                the hit test, so ``function`` is not called. The same
+                exception as drawText's ``size`` applies to a whole-number
+                float already in the font cache.
             text: The label, centered on the box. It is not clipped to the
                 box: a label too large for it overflows past the box edges,
                 and the overflow is painted but not clickable.
@@ -245,7 +256,9 @@ class Graphik:
         Unlike the other draw methods, this needs a display mode to have been
         set (``pygame.display.set_mode``), even when the instance is bound to
         an off-screen surface, because the loaded image is converted to the
-        display's pixel format.
+        display's pixel format. That conversion happens only when a path is
+        first loaded, so a path already in the cache keeps drawing to an
+        off-screen surface with no display mode set.
 
         Args:
             filePath: Path to the image file, used as the cache key.
@@ -257,7 +270,7 @@ class Graphik:
         Raises:
             FileNotFoundError: If no file exists at ``filePath``.
             pygame.error: If the file exists but pygame cannot decode it, or
-                if no display mode has been set.
+                if no display mode has been set when the path is first loaded.
             ValueError: If ``width`` or ``height`` is negative. (A zero size
                 does not raise; it draws nothing.)
         """
