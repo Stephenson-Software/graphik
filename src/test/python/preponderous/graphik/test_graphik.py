@@ -557,6 +557,36 @@ def test_draw_rectangle_fills_exactly_the_requested_region():
     assert _rgb(display, (4, 1)) == Graphik.black
 
 
+@pytest.mark.parametrize("alpha", [0, 128])
+def test_draw_rectangle_paints_a_translucent_color_opaquely_on_the_display(alpha):
+    # pygame.draw never blends, so an (r, g, b, a) color is not drawn
+    # translucently: on the display (which has no per-pixel alpha) the alpha
+    # is dropped and the RGB part covers whatever was underneath, even at a
+    # = 0.
+    graphik = _make_graphik()
+    display = graphik.getGameDisplay()
+    display.fill(Graphik.blue)
+
+    graphik.drawRectangle(2, 2, 5, 5, Graphik.red + (alpha,))
+
+    assert _rgb(display, (4, 4)) == Graphik.red
+
+
+def test_draw_rectangle_overwrites_the_alpha_of_a_per_pixel_alpha_surface():
+    # On a surface with per-pixel alpha, the color's alpha is written into the
+    # pixels as-is rather than blended over them: an opaque blue background
+    # becomes red at the color's alpha, not a red/blue mix.
+    pygame.display.init()
+    surface = pygame.Surface((10, 10), pygame.SRCALPHA)
+    graphik = Graphik(surface)
+    surface.fill(Graphik.blue + (255,))
+
+    graphik.drawRectangle(2, 2, 5, 5, Graphik.red + (128,))
+
+    assert tuple(surface.get_at((4, 4))) == Graphik.red + (128,)
+    assert tuple(surface.get_at((8, 8))) == Graphik.blue + (255,)
+
+
 def test_draw_text_blits_non_background_pixels():
     graphik = _make_graphik()
     display = graphik.getGameDisplay()

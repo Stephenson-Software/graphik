@@ -99,7 +99,10 @@ class Graphik:
             ypos: Y coordinate of the rectangle's top edge, in pixels.
             width: Width of the rectangle, in pixels.
             height: Height of the rectangle, in pixels.
-            color: Fill color as an ``(r, g, b)`` tuple.
+            color: Fill color as an ``(r, g, b)`` tuple. An alpha component
+                is not blended: on the display the rectangle is painted
+                opaquely, and on a surface with per-pixel alpha the alpha is
+                written into the pixels in place of theirs.
         """
         pygame.draw.rect(self.gameDisplay, color, [xpos, ypos, width, height])
 
@@ -207,7 +210,9 @@ class Graphik:
             ypos: Y coordinate of the box's top edge, in pixels.
             width: Width of the box, in pixels.
             height: Height of the box, in pixels.
-            colorBox: Fill color of the box as an ``(r, g, b)`` tuple.
+            colorBox: Fill color of the box as an ``(r, g, b)`` tuple. As
+                for drawRectangle's ``color``, an alpha component is not
+                blended.
             colorText: Color of the label as an ``(r, g, b)`` tuple.
             sizeText: Font size of the label, in points, as an ``int``. A
                 float raises ``TypeError`` once the box is painted, before
