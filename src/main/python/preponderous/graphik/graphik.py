@@ -155,7 +155,10 @@ class Graphik:
         surface, so a pixel-exact check should expect colors besides ``color``.
 
         Args:
-            text: The string to render.
+            text: The string to render, always as a single line: a ``"\\n"``
+                is not a line break, so multi-line text needs one call per
+                line. A null character (``"\\0"``) raises ``ValueError``
+                before anything is painted.
             xpos: X coordinate the text is centered on, in pixels.
             ypos: Y coordinate the text is centered on, in pixels.
             size: Font size in points, as an ``int`` (a float raises

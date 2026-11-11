@@ -717,6 +717,44 @@ def test_draw_text_accepts_an_empty_string_and_paints_nothing():
     assert all(_rgb(display, (x, y)) == Graphik.green for x in range(width) for y in range(height))
 
 
+def test_draw_text_does_not_break_lines_at_a_newline():
+    # drawText renders a single line: a "\n" is not a line break, so text
+    # meant for two lines stays on one, and a caller wanting several lines
+    # must call drawText once per line. If it did break, the ink of "A\nB"
+    # would span two line heights; on one line it fits within a single one.
+    graphik = _make_graphik((200, 200))
+    display = graphik.getGameDisplay()
+    display.fill(Graphik.black)
+
+    size = 20
+    graphik.drawText("A\nB", 100, 100, size, Graphik.white)
+
+    width, height = display.get_size()
+    inkedRows = [
+        y
+        for y in range(height)
+        if any(_rgb(display, (x, y)) != Graphik.black for x in range(width))
+    ]
+    assert inkedRows, "drawText left the surface untouched"
+    lineHeight = pygame.font.Font("freesansbold.ttf", size).get_linesize()
+    assert max(inkedRows) - min(inkedRows) < lineHeight
+
+
+def test_draw_text_with_a_null_character_raises_value_error_and_paints_nothing():
+    # pygame refuses to render text containing "\0", and drawText does not
+    # filter it out, so the ValueError reaches the caller before anything is
+    # blitted -- including the characters on either side of it.
+    graphik = _make_graphik((40, 40))
+    display = graphik.getGameDisplay()
+    display.fill(Graphik.green)
+
+    with pytest.raises(ValueError):
+        graphik.drawText("A\0B", 20, 20, 12, Graphik.white)
+
+    width, height = display.get_size()
+    assert all(_rgb(display, (x, y)) == Graphik.green for x in range(width) for y in range(height))
+
+
 def _count_font_constructions(monkeypatch):
     # Wrap pygame.font.Font so tests can observe how often it is built.
     constructed = []
