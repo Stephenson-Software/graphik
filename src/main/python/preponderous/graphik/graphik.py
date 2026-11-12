@@ -269,7 +269,10 @@ class Graphik:
         off-screen surface with no display mode set.
 
         Args:
-            filePath: Path to the image file, used as the cache key.
+            filePath: Path to the image file, as a ``str`` or a
+                ``pathlib.Path``. It is used as the cache key exactly as
+                given, so two spellings of one file (relative and absolute,
+                or a ``str`` and a ``Path``) are cached, and loaded, apart.
             xpos: X coordinate of the image's left edge, in pixels.
             ypos: Y coordinate of the image's top edge, in pixels.
             width: Width to scale the image to, in pixels.

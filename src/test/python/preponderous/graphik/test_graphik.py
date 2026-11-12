@@ -427,6 +427,45 @@ def test_draw_image_caches_each_path_independently(monkeypatch, tmp_path):
     assert _rgb(display, (15, 15)) == (0, 0, 255)
 
 
+def test_draw_image_accepts_a_pathlib_path_and_caches_it(monkeypatch, tmp_path):
+    # Every other drawImage test passes str(path). A pathlib.Path is accepted
+    # too -- pygame.image.load takes one -- and, because equal Path objects
+    # hash equal, a fresh Path to the same file is served from the cache.
+    graphik = _make_graphik((20, 20))
+    display = graphik.getGameDisplay()
+    display.fill(Graphik.black)
+    image_path = tmp_path / "red.bmp"
+    _write_solid_image(image_path, (255, 0, 0))
+
+    loaded = _count_image_loads(monkeypatch)
+    graphik.drawImage(image_path, 0, 0, 5, 5)
+    graphik.drawImage(tmp_path / "red.bmp", 0, 0, 5, 5)
+
+    assert loaded == [(image_path,)]
+    assert _rgb(display, (2, 2)) == (255, 0, 0)
+    assert _rgb(display, (7, 7)) == Graphik.black
+
+
+def test_draw_image_caches_by_the_path_as_given_not_the_file_it_names(
+    monkeypatch, tmp_path
+):
+    # The cache key is filePath exactly as passed, with no normalization, so
+    # different spellings of one file -- a str and a Path, or a relative and
+    # an absolute path -- are separate entries, each loaded once. Pins the
+    # current behavior so a switch to resolving paths is a deliberate one.
+    monkeypatch.chdir(tmp_path)
+    graphik = _make_graphik((20, 20))
+    image_path = tmp_path / "red.bmp"
+    _write_solid_image(image_path, (255, 0, 0))
+    spellings = [str(image_path), image_path, "red.bmp", "./red.bmp"]
+
+    loaded = _count_image_loads(monkeypatch)
+    for spelling in spellings + spellings:
+        graphik.drawImage(spelling, 0, 0, 5, 5)
+
+    assert [args[0] for args in loaded] == spellings
+
+
 def test_draw_image_converts_loaded_surface_for_faster_blits(monkeypatch, tmp_path):
     # pygame.Surface is a builtin type (its methods can't be monkeypatched),
     # so observe the conversion through the surface actually handed to
