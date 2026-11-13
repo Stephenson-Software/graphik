@@ -40,7 +40,8 @@ this repository:
    - smoke-tests the built wheel: installs it, runs `import preponderous.graphik`,
      and checks `__version__` against the tag. `Graphik` itself is imported
      lazily on first access, so this step never loads `graphik.py` or
-     `pygame` -- a wheel missing or breaking either would still pass it
+     `pygame` — a wheel with a missing or broken `graphik.py`, or without a
+     working `pygame` dependency, would still pass it
      (tracked in
      [#46](https://github.com/Stephenson-Software/graphik/issues/46)),
    - publishes to PyPI via Trusted Publishing.
