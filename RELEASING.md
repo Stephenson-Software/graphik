@@ -37,7 +37,12 @@ this repository:
 4. The `Publish to PyPI` workflow then:
    - verifies the tag matches `__version__` (a mismatch fails the build),
    - builds the sdist and wheel,
-   - smoke-tests the built wheel (install + canonical import + version check),
+   - smoke-tests the built wheel: installs it, runs `import preponderous.graphik`,
+     and checks `__version__` against the tag. `Graphik` itself is imported
+     lazily on first access, so this step never loads `graphik.py` or
+     `pygame` -- a wheel missing or breaking either would still pass it
+     (tracked in
+     [#46](https://github.com/Stephenson-Software/graphik/issues/46)),
    - publishes to PyPI via Trusted Publishing.
 
 The tag must equal `v` + `__version__` (e.g. `__version__ = "0.2.0"` → tag
