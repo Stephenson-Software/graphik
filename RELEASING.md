@@ -47,7 +47,13 @@ this repository:
    - publishes to PyPI via Trusted Publishing.
 
 The tag must equal `v` + `__version__` (e.g. `__version__ = "0.2.0"` → tag
-`v0.2.0`), or the build fails fast before anything is published.
+`v0.2.0`). A `v`-prefixed tag whose version does not match `__version__` fails
+the build before anything is published. A tag **without** the `v` prefix fails
+silently instead: it matches no trigger in `publish.yml`, so the workflow never
+runs and nothing reports the missed release. The `0.2.0` and
+`0.3.0.dev20260808` tags were pushed that way, which is why no release has been
+published yet (tracked in
+[#34](https://github.com/Stephenson-Software/graphik/issues/34)).
 
 ## Installing (after the first publish)
 

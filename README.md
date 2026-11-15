@@ -6,7 +6,7 @@ This library assists developers with graphics programming.
 ## Installation
 `graphik` has not been published to PyPI yet (see [RELEASING.md](RELEASING.md)
 for the release process), so `pip install graphik` will not resolve until the
-first release is tagged. Until then, install directly from this repository:
+first release is published. Until then, install directly from this repository:
 ```bash
 pip install git+https://github.com/Stephenson-Software/graphik.git
 ```
