@@ -700,6 +700,33 @@ def test_draw_text_renders_in_the_requested_color():
     assert all(g == 0 and b == 0 for _, g, b in inked)
 
 
+@pytest.mark.parametrize("alpha", [0, 128])
+def test_draw_text_ignores_the_alpha_of_its_color(alpha):
+    # An (r, g, b, a) text color is not drawn translucently: the alpha is
+    # dropped, so the fully-covered stem pixels come out as the opaque RGB
+    # color, even at a = 0 -- on the display and on a per-pixel alpha surface
+    # alike. Antialiasing still blends the glyph edges, as with any color.
+    graphik = _make_graphik((100, 100))
+    display = graphik.getGameDisplay()
+    display.fill(Graphik.black)
+
+    graphik.drawText("W", 50, 50, 40, Graphik.red + (alpha,))
+
+    inked = {
+        _rgb(display, (x, y))
+        for x in range(100)
+        for y in range(100)
+    } - {Graphik.black}
+    assert Graphik.red in inked
+
+    surface = pygame.Surface((100, 100), pygame.SRCALPHA)
+    surface.fill(Graphik.blue + (255,))
+    Graphik(surface).drawText("W", 50, 50, 40, Graphik.red + (alpha,))
+
+    pixels = {tuple(surface.get_at((x, y))) for x in range(100) for y in range(100)}
+    assert Graphik.red + (255,) in pixels
+
+
 def test_draw_text_antialiases_the_glyph_edges():
     # Aliased rendering would leave only two colors on the surface, the text
     # color and the background, and every other text test would still pass.
