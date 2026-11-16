@@ -168,7 +168,9 @@ class Graphik:
                 and one font per distinct size is cached and reused while a
                 display mode is set; with none set, the font is rebuilt on
                 every call.
-            color: Text color as an ``(r, g, b)`` tuple.
+            color: Text color as an ``(r, g, b)`` tuple. An alpha component
+                is ignored: the text is painted as if it were 255, on any
+                surface.
         """
         myFont = self._getFont(size)
         textSurface = myFont.render(text, True, color)
@@ -216,7 +218,8 @@ class Graphik:
             colorBox: Fill color of the box as an ``(r, g, b)`` tuple. As
                 for drawRectangle's ``color``, an alpha component is not
                 blended.
-            colorText: Color of the label as an ``(r, g, b)`` tuple.
+            colorText: Color of the label as an ``(r, g, b)`` tuple. As for
+                drawText's ``color``, an alpha component is ignored.
             sizeText: Font size of the label, in points, as an ``int``. A
                 float raises ``TypeError`` once the box is painted, before
                 the hit test, so ``function`` is not called. The same

@@ -61,7 +61,7 @@ Fractional positions and sizes are accepted: `drawRectangle`, `drawButton` and `
 
 Color constants: `Graphik.black`, `Graphik.white`, `Graphik.red`, `Graphik.green`, `Graphik.blue`.
 
-An alpha component in a fill color (`(r, g, b, a)`) does not make `drawRectangle` or `drawButton`'s box translucent: on the display the shape is painted opaquely whatever `a` is, and on a surface with per-pixel alpha (`pygame.SRCALPHA`) the color's alpha replaces the pixels' own rather than blending over them.
+An alpha component in a fill color (`(r, g, b, a)`) does not make `drawRectangle` or `drawButton`'s box translucent: on the display the shape is painted opaquely whatever `a` is, and on a surface with per-pixel alpha (`pygame.SRCALPHA`) the color's alpha replaces the pixels' own rather than blending over them. `drawText`'s `color` and `drawButton`'s `colorText` ignore an alpha component altogether: the text is painted as if `a` were 255, on the display and on a per-pixel alpha surface alike (only the antialiased glyph edges blend with what is underneath).
 
 ## Dependencies
 - pygame
