@@ -55,9 +55,9 @@ not match the trigger fails silently instead: the workflow never runs and
 nothing reports the missed release. That covers a tag **without** the `v`
 prefix, and also a `v`-prefixed tag with fewer than three parts such as
 `v1.0` — even when it equals `v` + `__version__`. (The `v0.1` tag on this
-repository is of that shape, and would not trigger the workflow either.) The `0.2.0` and
-`0.3.0.dev20260808` tags were pushed that way, so the publish workflow has never
-run (tracked in
+repository is of that shape, and would not trigger the workflow either.) The
+`0.2.0` and `0.3.0.dev20260808` tags were pushed without the prefix, so the
+publish workflow has never run (tracked in
 [#34](https://github.com/Stephenson-Software/graphik/issues/34)).
 
 ## Installing (after the first publish)
