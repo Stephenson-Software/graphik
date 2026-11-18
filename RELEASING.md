@@ -47,10 +47,15 @@ this repository:
    - publishes to PyPI via Trusted Publishing.
 
 The tag must equal `v` + `__version__` (e.g. `__version__ = "0.2.0"` → tag
-`v0.2.0`). A `v`-prefixed tag whose version does not match `__version__` fails
-the build before anything is published. A tag **without** the `v` prefix fails
-silently instead: it matches no trigger in `publish.yml`, so the workflow never
-runs and nothing reports the missed release. The `0.2.0` and
+`v0.2.0`), and `__version__` must have at least three dot-separated parts,
+because the trigger in `publish.yml` is the glob `v*.*.*`, which needs two dots
+after the `v`. A tag that matches the trigger but whose version does not match
+`__version__` fails the build before anything is published. A tag that does
+not match the trigger fails silently instead: the workflow never runs and
+nothing reports the missed release. That covers a tag **without** the `v`
+prefix, and also a `v`-prefixed tag with fewer than three parts such as
+`v1.0` — even when it equals `v` + `__version__`. (The `v0.1` tag on this
+repository is of that shape, and would not trigger the workflow either.) The `0.2.0` and
 `0.3.0.dev20260808` tags were pushed that way, so the publish workflow has never
 run (tracked in
 [#34](https://github.com/Stephenson-Software/graphik/issues/34)).
