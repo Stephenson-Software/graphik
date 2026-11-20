@@ -36,6 +36,10 @@ package-dir = { "" = "src/main/python" }
 [tool.setuptools.packages.find]
 where = ["src/main/python"]
 
+# grid3d's pygbag page template (grid3d.web.templatePath())
+[tool.setuptools.package-data]
+"preponderous.graphik.grid3d" = ["templates/*.tmpl"]
+
 [tool.setuptools.dynamic]
 version = { attr = "preponderous.graphik._version.__version__" }
 

@@ -11,7 +11,7 @@ This library assists developers with graphics programming.
 graphik is released as git tags, not on PyPI. Install a release from its tag's
 archive (no `git` needed):
 ```bash
-pip install "graphik @ https://github.com/Stephenson-Software/graphik/archive/refs/tags/v0.4.0.zip"
+pip install "graphik @ https://github.com/Stephenson-Software/graphik/archive/refs/tags/v0.5.0.zip"
 ```
 In a `requirements.txt`, use the same line without the quotes. See
 [RELEASING.md](RELEASING.md) for how releases are cut.
@@ -91,10 +91,11 @@ An alpha component in a fill color (`(r, g, b, a)`) does not make `drawRectangle
 pieces standing on cells that slide smoothly between cells from one game tick
 to the next. A game describes its board once and reports what is on each cell
 every tick; the look lives in a `Theme`. It needs the optional Strata binding
-and runs on Linux and Windows desktops:
+and runs on Linux and Windows desktops, and in the browser under pygbag
+(see [In the browser](#in-the-browser)):
 
 ```bash
-pip install "graphik[strata] @ https://github.com/Stephenson-Software/graphik/archive/refs/tags/v0.4.0.zip"
+pip install "graphik[strata] @ https://github.com/Stephenson-Software/graphik/archive/refs/tags/v0.5.0.zip"
 ```
 
 ```python
@@ -119,10 +120,42 @@ else:
 - `Grid3DView.open(..., headless=True)` renders off-screen for tests and screenshots (`savePng`); `reducedMotion=True` makes pieces jump instead of slide.
 - `Unavailable` says in plain words why 3D can't run (no binding, no library for the system, no window); the game should fall back to its 2D view.
 - Everything except `Grid3DView.open` is plain Python, so scene code can be unit-tested without a GPU. Importing `grid3d` loads neither Strata nor pygame.
+- `PieceStyle.extras(piece, x, z, baseY)` returns shapes placed relative to the piece: x and z measured from the given `(x, z)`, so moving the piece moves them all the same way. The browser backend sends them as offsets from the piece and relies on this.
+
+### Helpers for a game's 3D view
+
+So that games stop hand-building the same pieces:
+
+- **Picking.** `view.pickCell(x, y)` (or `pickCell(camera, board, x, y, width, height)`) gives the `(column, row)` under a pointer, or `None`; the whole cell counts, gaps between tiles included. `projectToScreen(camera, point, width, height)` and `cellScreenPosition(camera, board, column, row, width, height, y)` go the other way, for aiming a tap at a piece or putting a note beside a tile. They use the same look-at and perspective the view asks Strata for.
+- **Text.** Strata's built-in font is an 8 x 8 bitmap font in which every character is exactly `pixelSize` wide. `measureText(text, pixelSize)`, `fitText(text, width, pixelSize)` (cut with `...`), `wrapText(text, maxWidth, pixelSize)` (greedy word wrap) and `centredLabel(text, x, y, pixelSize, color, rise=0.5)` build on that.
+- **Screen buttons.** `Button(x, y, width, height, text, color, textColor, pixelSize, function)` draws a panel and a centred label (`button.draw(pointer)`), hit-tests with `drawButton`'s edges (`contains`, `click`), and lifts under the pointer as `drawButton` does (`hoverColor`). Colours are 0-255, as for `drawButton`; `padding` widens a button whose label doesn't fit.
+- **2D screens under a 3D view.** `ScreenRecorder` stands in for `Graphik`: a game's 2D screens draw into it as usual (`drawText`, `drawRectangle`, `drawButton`), the 3D view shows what they drew, and `recorder.click(pos)` runs the 2D button's own function.
+- **Bigger boards.** `GridBoard(columns, rows, theme, tiles=..., mergeTiles=True, viewport=...)`: `tiles` maps a cell to its own `Tile(color, raised)`; `mergeTiles` draws each row's neighbouring tiles that look the same as one box (a 64 x 64 board of one colour is 64 boxes, not 4096); `viewport=Viewport.around(column, row, reach)` draws only a window of the board, framed and fitted as if it were the whole board, with pieces and picking still in whole-board cells.
+- **Hover.** `board.scene(..., highlight=(column, row))` lays a thin slab in `Theme.highlight` on the tile under the pointer.
+- **Chains.** `board.bridgePairs(pieces)` names the joined pieces and `board.bridgeShape(a, b, aAt, bAt)` draws one bridge.
+
+### In the browser
+
+Under [pygbag](https://pypi.org/project/pygbag/) (`sys.platform == "emscripten"`), `Grid3DView.open()` returns a `grid3d.web.Grid3DWebView`: the same calls, drawn by Strata's grid relay, a small Strata web-kit scene in the page (Strata's `web/kit/grid-relay`, whose `WIRE.md` specifies the messages). Python sends the board, each tick's pieces, the HUD and the camera as small versioned binary messages; the page slides the pieces between ticks itself, so nothing is sent per display frame. A game that builds whole `Scene`s can keep calling `drawScene()` every frame; only what changed is sent.
+
+- `view.ready` turns true once the page has loaded the 3D view; `view.failure()` says why it couldn't. `open()` raises `Unavailable` on a page without the relay.
+- `view.pollEvents()` returns Strata-style events (keys with desktop Strata's scancodes, mouse, wheel, resize, and `FINGER_*` for touch), and `grid3d.web.toPygameEvents(events, pygame)` turns them into pygame events, so a game's 2D input code runs unchanged. It converts desktop Strata events too.
+- The page: build with `pygbag --template <grid3d.web.templatePath()> ...`, a copy of pygbag 0.9.3's default template with the relay's canvas and scripts and a **3D** button. The relay has to be served with the game (a browser can't fetch GitHub release assets cross-origin): `python -m preponderous.graphik.grid3d.relay --strata 0.9.0 --dest <pygbag output>` downloads Strata's `strata-<version>-wasm32-emscripten.tar.gz`, checks it against the release's `SHA256SUMS` and copies its prebuilt `kit/grid-relay/dist/` next to the page, leaving files already there (pygbag's `index.html`) alone. Nothing of the 3D view is downloaded until the player presses the button; the 2D canvas stays on screen while it loads and whenever it can't (too big, no WebGL 2), and the button then says so. `grid3d.web.wants3D()` tells the game the button is on, and `set3D(False, reason)` turns it off.
+
+In a game's `browser.yml`, where graphik is installed into `src/` for pygbag:
+
+```yaml
+      - name: Build with pygbag, on graphik's 3D page template
+        run: |
+          TEMPLATE="$(PYTHONPATH=src python -c 'from preponderous.graphik.grid3d.web import templatePath; print(templatePath())')"
+          python -m pygbag --build --template "$TEMPLATE" --title "My game" src
+      - name: Add Strata's grid relay next to the page
+        run: PYTHONPATH=src python -m preponderous.graphik.grid3d.relay --strata 0.9.0 --dest src/build/web
+```
 
 ## Dependencies
 - pygame
-- optional: `strata-engine` 0.7.0 for the 3D grid view (the `strata` extra)
+- optional: `strata-engine` 0.8.0 for the 3D grid view on the desktop (the `strata` extra)
 
 Python 3.9 or newer is required (`requires-python` in [pyproject.toml](pyproject.toml)). The test suite is run against 3.9 through 3.13; see [`.github/workflows/test.yml`](.github/workflows/test.yml) for why 3.13 is the ceiling.
 
