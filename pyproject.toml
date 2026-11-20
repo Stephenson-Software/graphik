@@ -19,6 +19,13 @@ classifiers = [
 
 [project.optional-dependencies]
 test = ["pytest"]
+# The 3D grid view (preponderous.graphik.grid3d) draws with Strata's Python
+# binding. It isn't on PyPI, so it is installed from the Strata release tag;
+# graphik itself is installed from tag archives too, never from PyPI, so a
+# direct reference here is allowed.
+strata = [
+    "strata-engine @ git+https://github.com/Preponderous-Software/strata@v0.7.0#subdirectory=bindings/python",
+]
 
 [project.urls]
 Homepage = "https://github.com/Stephenson-Software/graphik"

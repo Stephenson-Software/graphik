@@ -84,8 +84,45 @@ Color constants: `Graphik.black`, `Graphik.white`, `Graphik.red`, `Graphik.green
 
 An alpha component in a fill color (`(r, g, b, a)`) does not make `drawRectangle` or `drawButton`'s box translucent: on the display the shape is painted opaquely whatever `a` is, and on a surface with per-pixel alpha (`pygame.SRCALPHA`) the color's alpha replaces the pixels' own rather than blending over them. `drawText`'s `color` and `drawButton`'s `colorText` ignore an alpha component altogether: the text is painted as if `a` were 255, on the display and on a per-pixel alpha surface alike (only the antialiased glyph edges blend with what is underneath).
 
+## 3D grid view (optional)
+
+`preponderous.graphik.grid3d` draws a grid game's board in 3D with
+[Strata](https://github.com/Preponderous-Software/strata): tiles, a frame, and
+pieces standing on cells that slide smoothly between cells from one game tick
+to the next. A game describes its board once and reports what is on each cell
+every tick; the look lives in a `Theme`. It needs the optional Strata binding
+and runs on Linux and Windows desktops:
+
+```bash
+pip install "graphik[strata] @ https://github.com/Stephenson-Software/graphik/archive/refs/tags/v0.3.0.zip"
+```
+
+```python
+from preponderous.graphik.grid3d import (
+    SPHERE, Grid3DView, GridBoard, Label, Piece, PieceStyle, Theme, Unavailable,
+)
+
+theme = Theme(pieces={"pawn": PieceStyle(SPHERE, (0.9, 0.25, 0.2))})
+try:
+    view = Grid3DView.open(900, 700, "My game")
+except Unavailable as reason:
+    print("No 3D here:", reason)  # keep the 2D game
+else:
+    view.setBoard(GridBoard(8, 8, theme))
+    view.setPieces([Piece("p1", 3, 4, "pawn")], tickSeconds=0.15)  # once per tick
+    view.setLabels([Label("Score: 0", 18, 16, 24)])                # when it changes
+    view.frame()                                                    # once per frame
+```
+
+- `Piece(id, column, row, style)`: keep `id` stable so the piece slides; `chain`/`link` join neighbouring pieces (a snake's body); `interpolate=False` makes it jump; `scale`, `color` and `facing` vary one piece.
+- `PieceStyle(kind, color, height, size, lift, glow, tones, extras)`: `glow` adds a point light; `extras` draws decorations such as eyes.
+- `Grid3DView.open(..., headless=True)` renders off-screen for tests and screenshots (`savePng`); `reducedMotion=True` makes pieces jump instead of slide.
+- `Unavailable` says in plain words why 3D can't run (no binding, no library for the system, no window); the game should fall back to its 2D view.
+- Everything except `Grid3DView.open` is plain Python, so scene code can be unit-tested without a GPU. Importing `grid3d` loads neither Strata nor pygame.
+
 ## Dependencies
 - pygame
+- optional: `strata-engine` 0.7.0 for the 3D grid view (the `strata` extra)
 
 Python 3.9 or newer is required (`requires-python` in [pyproject.toml](pyproject.toml)). The test suite is run against 3.9 through 3.13; see [`.github/workflows/test.yml`](.github/workflows/test.yml) for why 3.13 is the ceiling.
 
