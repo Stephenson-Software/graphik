@@ -11,7 +11,7 @@ This library assists developers with graphics programming.
 graphik is released as git tags, not on PyPI. Install a release from its tag's
 archive (no `git` needed):
 ```bash
-pip install "graphik @ https://github.com/Stephenson-Software/graphik/archive/refs/tags/v0.3.0.zip"
+pip install "graphik @ https://github.com/Stephenson-Software/graphik/archive/refs/tags/v0.4.0.zip"
 ```
 In a `requirements.txt`, use the same line without the quotes. See
 [RELEASING.md](RELEASING.md) for how releases are cut.
@@ -94,7 +94,7 @@ every tick; the look lives in a `Theme`. It needs the optional Strata binding
 and runs on Linux and Windows desktops:
 
 ```bash
-pip install "graphik[strata] @ https://github.com/Stephenson-Software/graphik/archive/refs/tags/v0.3.0.zip"
+pip install "graphik[strata] @ https://github.com/Stephenson-Software/graphik/archive/refs/tags/v0.4.0.zip"
 ```
 
 ```python

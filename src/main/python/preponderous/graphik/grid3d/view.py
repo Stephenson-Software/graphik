@@ -27,7 +27,7 @@ import time
 
 from .animate import Animator
 
-STRATA_VERSION = "0.7.0"
+STRATA_VERSION = "0.8.0"
 STRATA_PLATFORMS = ("linux", "win32")
 INSTALL_HINT = "pip install 'graphik[strata]'"
 

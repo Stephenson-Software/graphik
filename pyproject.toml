@@ -24,7 +24,7 @@ test = ["pytest"]
 # graphik itself is installed from tag archives too, never from PyPI, so a
 # direct reference here is allowed.
 strata = [
-    "strata-engine @ git+https://github.com/Preponderous-Software/strata@v0.7.0#subdirectory=bindings/python",
+    "strata-engine @ git+https://github.com/Preponderous-Software/strata@v0.8.0#subdirectory=bindings/python",
 ]
 
 [project.urls]
