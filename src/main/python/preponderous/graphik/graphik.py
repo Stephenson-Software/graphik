@@ -78,6 +78,73 @@ class Graphik:
         # doesn't need the font cache's session-invalidation logic.
         self._images = {}
         self._scaledImages = {}
+        # Press-only clicks (see beginFrame). Until beginFrame is first
+        # called, drawButton keeps the original repeat-fire behaviour.
+        self._frameMode = False
+        self._frameStarted = False
+        self._mouseDownPrev = False
+        self._mouseDownCurrent = False
+        # True once the current press has fired a callback; cleared when a
+        # snapshot sees button 1 up. Keeps one press from firing twice.
+        self._pressSpent = False
+
+    def beginFrame(self):
+        """Start a frame: snapshot mouse button 1 for press-only clicks.
+
+        Call once at the top of each frame, before any drawButton, and pair
+        it with endFrame at the end of the frame. From the first call on,
+        drawButton calls its ``function`` once per click: in the frame where
+        button 1 goes down while the mouse is over the box. A press that is
+        already held when the first beginFrame runs, or that slides onto a
+        button while held, does not count. Like any once-per-frame poll, a
+        release and a new press that both happen between two frames are not
+        seen.
+
+        Calling beginFrame again before endFrame, with the mouse button in
+        the same state, does nothing, so nested code may call it too. If the
+        button's state has changed since the last snapshot, the call takes a
+        new snapshot, so a frame that missed its endFrame (an exception, an
+        early return) does not leave clicks stuck. Each press fires at most
+        one callback, so a press is never handed to a second button or to a
+        nested screen's loop that runs inside the first callback.
+
+        An instance that never calls beginFrame keeps the original behaviour,
+        so existing callers are unaffected.
+        """
+        down = pygame.mouse.get_pressed()[0] == 1
+        if not self._frameMode:
+            # Entering press-only mode: a press already held now is not new.
+            self._mouseDownCurrent = down
+            self._pressSpent = down
+            self._frameMode = True
+        if not self._frameStarted or down != self._mouseDownCurrent:
+            self._mouseDownPrev = self._mouseDownCurrent
+            self._mouseDownCurrent = down
+        if not down:
+            self._pressSpent = False
+        self._frameStarted = True
+
+    def endFrame(self):
+        """End a frame started with beginFrame, so the next one snapshots again."""
+        self._frameStarted = False
+
+    @staticmethod
+    def _hoverColor(color):
+        """Return ``color`` lifted for hover: light colors darken, dark ones lighten.
+
+        Light means an average r/g/b of 128 or more; those darken by 25. The
+        rest lighten by 35. Each channel is clamped to 0-255 and any alpha is
+        kept. Tuples and lists come back as a tuple of the same length; a
+        name, hex string or pygame.Color comes back as a pygame.Color. An int
+        is read as 0xRRGGBBAA here, so drawButton converts a surface-mapped
+        int to r/g/b before calling this.
+        """
+        c = pygame.Color(color)
+        shift = -25 if (c.r + c.g + c.b) / 3 >= 128 else 35
+        r, g, b = (max(0, min(255, v + shift)) for v in (c.r, c.g, c.b))
+        if isinstance(color, (tuple, list)):
+            return (r, g, b, c.a) if len(color) == 4 else (r, g, b)
+        return pygame.Color(r, g, b, c.a)
 
     def getGameDisplay(self):
         """Return the pygame surface this instance draws to."""
@@ -179,12 +246,21 @@ class Graphik:
         self.gameDisplay.blit(textSurface, textRectangle)
 
     def drawButton(self, xpos, ypos, width, height, colorBox, colorText, sizeText, text, function):
-        """Draw a labelled box and call ``function`` while it is being clicked.
+        """Draw a labelled box and call ``function`` when it is clicked.
 
-        ``function()`` is called on every invocation where the mouse sits
-        inside the box with button 1 held down -- once per call, not once per
-        click. A caller wanting once-per-click semantics must debounce on its
-        own side; see the implementation note below for why.
+        By default, ``function()`` is called on every invocation where the
+        mouse sits inside the box with button 1 held down -- once per call,
+        not once per click. After the first beginFrame() call on this
+        instance, it is called once per click instead: only in the frame
+        where button 1 goes down while the mouse is inside the box. See the
+        implementation note below for why the default is kept.
+
+        While the mouse is over the box, the box is drawn in a lifted color
+        (light colors darken, dark ones lighten; see _hoverColor), so it
+        reads as clickable. The label color is unchanged. "Over the box" uses
+        the same window coordinates as the hit test (see below), so on an
+        offset subsurface the hover shows where the box is clickable, not
+        where it is painted.
 
         The clickable region is exactly the region the box is drawn over:
         ``xpos`` through ``xpos + width - 1`` horizontally, and ``ypos``
@@ -230,27 +306,55 @@ class Graphik:
                 and the overflow is painted but not clickable.
             function: Zero-argument callable invoked as described above.
         """
-        # Polls the current mouse state rather than tracking press/release
-        # edges, so function() fires on every call where the mouse is held
-        # inside the button with button 1 down -- once per call, not once
-        # per click. Deliberately left this way: the vendored copies in
-        # Roam/Apex/Ophidian/Patchwork/Tic-Tak-Toe are written against this
-        # repeat-fire behavior. Callers wanting once-per-click semantics
-        # must debounce on their side.
-        self.drawRectangle(xpos, ypos, width, height, colorBox)
-        self.drawText(text, xpos + (width//2), ypos + (height//2), sizeText, colorText)
-        
-        # if clicked then do function
-        mouse = pygame.mouse.get_pos()
+        # Without beginFrame, this polls the current mouse state rather than
+        # tracking press/release edges, so function() fires on every call
+        # where the mouse is held inside the button with button 1 down. That
+        # default is deliberate: the vendored copies in Roam/Apex/Ophidian/
+        # Patchwork/Tic-Tak-Toe were written against this repeat-fire
+        # behavior. Press-only clicks (ported from Roam's copy) are opt-in
+        # through beginFrame.
+        #
+        # The mouse is read before painting so the box can show hover, but a
+        # failure to read it (video system not initialised) is raised only
+        # after the box and label are painted, as before.
+        try:
+            mouse = pygame.mouse.get_pos()
+            mouseError = None
+        except pygame.error as error:
+            mouse, mouseError = None, error
         # Half-open on both axes, matching the range pygame.draw.rect fills, so
         # the clickable region is exactly the drawn one. A strict `> xpos` here
         # would leave the painted left and top edge columns unclickable, and a
         # closed `<= xpos + width` would let edge-to-edge buttons both claim
         # their shared boundary.
-        if (xpos <= mouse[0] < xpos + width and ypos <= mouse[1] < ypos + height):
-            click = pygame.mouse.get_pressed()
-            if click[0] == 1:
+        hovering = mouse is not None and (
+            xpos <= mouse[0] < xpos + width and ypos <= mouse[1] < ypos + height)
+
+        if hovering:
+            # pygame.draw.rect reads an int as a pixel already mapped to the
+            # surface, while pygame.Color reads it as 0xRRGGBBAA, so map it
+            # back to r/g/b first or the lift would change its hue.
+            baseColor = colorBox
+            if isinstance(colorBox, int) and not isinstance(colorBox, bool):
+                baseColor = self.gameDisplay.unmap_rgb(colorBox)
+            boxColor = self._hoverColor(baseColor)
+        else:
+            boxColor = colorBox
+        self.drawRectangle(xpos, ypos, width, height, boxColor)
+        self.drawText(text, xpos + (width//2), ypos + (height//2), sizeText, colorText)
+        if mouseError is not None:
+            raise mouseError
+
+        if not hovering:
+            return
+        if self._frameMode:
+            if self._mouseDownCurrent and not self._mouseDownPrev and not self._pressSpent:
+                # Spend the press before calling out, so a nested loop run by
+                # the callback, or a later drawButton, can't fire it again.
+                self._pressSpent = True
                 function()
+        elif pygame.mouse.get_pressed()[0] == 1:
+            function()
 
     def drawImage(self, filePath, xpos, ypos, width, height):
         """Draw an image file, scaled to the given size.

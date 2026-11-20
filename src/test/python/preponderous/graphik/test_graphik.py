@@ -9,6 +9,11 @@ import pytest
 import preponderous.graphik as graphik_pkg
 from preponderous.graphik import Graphik
 
+# drawButton's hover colors for the boxes these tests draw. Both are dark
+# (average r/g/b under 128), so each channel lightens by 35, clamped at 255.
+BLUE_HOVER = (35, 35, 235)  # Graphik.blue (0, 0, 200)
+GREEN_HOVER = (35, 235, 35)  # Graphik.green (0, 200, 0)
+
 _SRC_MAIN = os.path.normpath(
     os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "..", "..", "main", "python")
 )
@@ -1215,7 +1220,7 @@ def _draw_button_at(graphik, imagePath, xpos, ypos):
         pytest.param(15, 15, id="past_bottom_right"),
     ],
 )
-def test_draw_methods_clip_a_shape_that_crosses_the_surface_edge(draw, xpos, ypos, tmp_path):
+def test_draw_methods_clip_a_shape_that_crosses_the_surface_edge(draw, xpos, ypos, tmp_path, monkeypatch):
     # Consumers that scroll a tiled view draw tiles straddling the edge of the
     # display every frame, relying on the part that lands on the surface being
     # painted and the rest being dropped -- not on a raise, and not on the
@@ -1230,6 +1235,9 @@ def test_draw_methods_clip_a_shape_that_crosses_the_surface_edge(draw, xpos, ypo
 
     imagePath = tmp_path / "green.bmp"
     _write_solid_image(imagePath, (0, 255, 0))
+    # Keep the mouse off every box so drawButton paints its plain color, not
+    # the hover lift; hover has its own tests.
+    monkeypatch.setattr(pygame.mouse, "get_pos", lambda: (-100, -100))
 
     draw(graphik, imagePath, xpos, ypos)
 
@@ -1513,7 +1521,7 @@ def test_draw_button_rejects_a_fractional_text_size(monkeypatch):
     with pytest.raises(TypeError):
         graphik.drawButton(0, 0, 40, 40, Graphik.blue, Graphik.white, 16.5, "Go", lambda: calls.append(True))
 
-    assert _rgb(display, (5, 5)) == Graphik.blue
+    assert _rgb(display, (5, 5)) == BLUE_HOVER
     assert calls == []
 
 
@@ -1547,7 +1555,10 @@ def test_draw_button_with_fractional_bounds_hit_tests_the_unrounded_box(monkeypa
     graphik.drawButton(10.5, 10.5, 10.5, 10.5, Graphik.blue, Graphik.white, 10, "", lambda: calls.append(True))
 
     assert bool(calls) == expect_call
-    assert (_rgb(display, pos) == Graphik.blue) == painted
+    # The box takes the hover color exactly when the mouse is inside the hit
+    # region (expect_call), so a painted pixel is one of the two blues.
+    boxColor = BLUE_HOVER if expect_call else Graphik.blue
+    assert (_rgb(display, pos) == boxColor) == painted
 
 
 def test_draw_button_draws_box_with_given_color():
@@ -1673,8 +1684,8 @@ def test_draw_button_with_an_empty_label_draws_a_plain_box(monkeypatch):
 
     graphik.drawButton(10, 10, 20, 20, Graphik.blue, Graphik.white, 10, "", lambda: calls.append(True))
 
-    assert all(_rgb(display, (x, y)) == Graphik.blue for x in range(10, 30) for y in range(10, 30))
-    assert _button_label_ink(display, Graphik.blue) == []
+    assert all(_rgb(display, (x, y)) == BLUE_HOVER for x in range(10, 30) for y in range(10, 30))
+    assert _button_label_ink(display, BLUE_HOVER) == []
     assert calls == [True]
 
 
@@ -1792,10 +1803,9 @@ def test_draw_button_paints_before_invoking_the_callback(monkeypatch):
     # The box and label are drawn first and the hit test runs last, so by the
     # time function() is called the button is already on the surface, and
     # anything the callback paints (e.g. switching to another screen) lands
-    # on top of it rather than being painted over. Moving the hit test ahead
-    # of the drawing -- say, to pick a hover color -- would leave every other
-    # drawButton test green while letting the button overwrite the callback's
-    # output in the same frame.
+    # on top of it rather than being painted over. The hit test now runs
+    # before painting to pick the hover color, so this also pins that the
+    # callback still fires only after the box is painted.
     graphik = _make_graphik((40, 40))
     display = graphik.getGameDisplay()
     display.fill(Graphik.black)
@@ -1809,8 +1819,8 @@ def test_draw_button_paints_before_invoking_the_callback(monkeypatch):
 
     graphik.drawButton(10, 10, 20, 20, Graphik.blue, Graphik.white, 10, "Go", callback)
 
-    # The box was already painted when the callback ran...
-    assert seenAtCallback == [Graphik.blue]
+    # The box was already painted (in its hover color) when the callback ran...
+    assert seenAtCallback == [BLUE_HOVER]
     # ...and nothing drawButton does afterwards paints over the callback's output.
     assert all(_rgb(display, (x, y)) == Graphik.green for x in range(40) for y in range(40))
 
@@ -1855,5 +1865,214 @@ def test_draw_button_requires_the_video_system_even_for_an_off_screen_surface():
 
     pygame.display.init()
     assert pygame.display.get_surface() is None
+    # The mouse now reads (0, 0), inside the box, so it takes the hover color.
     graphik.drawButton(0, 0, 20, 20, Graphik.green, Graphik.white, 6, "", lambda: None)
-    assert _rgb(target, (5, 5)) == Graphik.green
+    assert _rgb(target, (5, 5)) == GREEN_HOVER
+
+
+# --- hover lift (ported from Roam's vendored copy) ------------------------------
+
+
+@pytest.mark.parametrize(
+    "color, expected",
+    [
+        pytest.param((0, 0, 200), (35, 35, 235), id="dark_lightens"),
+        pytest.param((240, 240, 240), (215, 215, 215), id="light_darkens"),
+        pytest.param((128, 128, 128), (103, 103, 103), id="average_128_counts_as_light"),
+        pytest.param((10, 250, 0), (45, 255, 35), id="clamped_at_255"),
+        pytest.param((250, 250, 10), (225, 225, 0), id="clamped_at_0"),
+        pytest.param((0, 0, 200, 90), (35, 35, 235, 90), id="alpha_kept"),
+        pytest.param([0, 0, 200], (35, 35, 235), id="list_becomes_tuple"),
+    ],
+)
+def test_hover_color(color, expected):
+    assert Graphik._hoverColor(color) == expected
+
+
+def test_hover_color_accepts_a_color_name():
+    assert Graphik._hoverColor("white") == pygame.Color(230, 230, 230, 255)
+
+
+def test_draw_button_lifts_the_box_only_while_the_mouse_is_over_it(monkeypatch):
+    graphik = _make_graphik((40, 40))
+    display = graphik.getGameDisplay()
+    monkeypatch.setattr(pygame.mouse, "get_pressed", lambda: (0, 0, 0))
+
+    monkeypatch.setattr(pygame.mouse, "get_pos", lambda: (35, 35))
+    graphik.drawButton(10, 10, 20, 20, Graphik.blue, Graphik.white, 10, "", lambda: None)
+    assert _rgb(display, (15, 15)) == Graphik.blue
+
+    monkeypatch.setattr(pygame.mouse, "get_pos", lambda: (15, 15))
+    graphik.drawButton(10, 10, 20, 20, Graphik.blue, Graphik.white, 10, "", lambda: None)
+    assert _rgb(display, (15, 15)) == BLUE_HOVER
+
+
+# --- press-only clicks via beginFrame (ported from Roam's vendored copy) --------
+
+
+def _frames(graphik, monkeypatch, presses, calls, pos=(15, 15)):
+    """Run one beginFrame/drawButton/endFrame per entry of ``presses``."""
+    monkeypatch.setattr(pygame.mouse, "get_pos", lambda: pos)
+    for down in presses:
+        monkeypatch.setattr(pygame.mouse, "get_pressed", lambda d=down: (1 if d else 0, 0, 0))
+        graphik.beginFrame()
+        graphik.drawButton(10, 10, 20, 20, Graphik.blue, Graphik.white, 10, "", lambda: calls.append(True))
+        graphik.endFrame()
+
+
+def test_without_begin_frame_a_held_button_still_fires_every_call(monkeypatch):
+    # The default must not change for callers that never call beginFrame.
+    graphik = _make_graphik((40, 40))
+    calls = []
+    monkeypatch.setattr(pygame.mouse, "get_pos", lambda: (15, 15))
+    monkeypatch.setattr(pygame.mouse, "get_pressed", lambda: (1, 0, 0))
+    for _ in range(3):
+        graphik.drawButton(10, 10, 20, 20, Graphik.blue, Graphik.white, 10, "", lambda: calls.append(True))
+    assert calls == [True, True, True]
+
+
+def test_with_begin_frame_a_held_button_fires_once(monkeypatch):
+    graphik = _make_graphik((40, 40))
+    calls = []
+    _frames(graphik, monkeypatch, [False, True, True, True], calls)
+    assert calls == [True]
+
+
+def test_with_begin_frame_each_new_press_fires_again(monkeypatch):
+    graphik = _make_graphik((40, 40))
+    calls = []
+    _frames(graphik, monkeypatch, [False, True, False, True, True, False, True], calls)
+    assert calls == [True, True, True]
+
+
+def test_with_begin_frame_a_press_outside_the_box_does_not_fire(monkeypatch):
+    graphik = _make_graphik((40, 40))
+    calls = []
+    _frames(graphik, monkeypatch, [False, True], calls, pos=(35, 35))
+    assert calls == []
+
+
+def test_begin_frame_twice_in_one_frame_snapshots_once(monkeypatch):
+    # Nested screens may each call beginFrame; the second call in the same
+    # frame must not shift "previous" forward and swallow the press.
+    graphik = _make_graphik((40, 40))
+    calls = []
+    _frames(graphik, monkeypatch, [False], calls)
+    monkeypatch.setattr(pygame.mouse, "get_pressed", lambda: (1, 0, 0))
+    graphik.beginFrame()
+    graphik.beginFrame()
+    graphik.drawButton(10, 10, 20, 20, Graphik.blue, Graphik.white, 10, "", lambda: calls.append(True))
+    graphik.endFrame()
+    assert calls == [True]
+
+
+# --- press-only robustness (from review of 0.3.0) --------------------------------
+
+
+def _drawGo(graphik, calls, color=Graphik.blue):
+    graphik.drawButton(10, 10, 20, 20, color, Graphik.white, 10, "", lambda: calls.append(True))
+
+
+def _press(monkeypatch, down):
+    monkeypatch.setattr(pygame.mouse, "get_pressed", lambda: (1 if down else 0, 0, 0))
+
+
+def test_a_press_already_held_when_frames_start_does_not_count(monkeypatch):
+    graphik = _make_graphik((40, 40))
+    calls = []
+    _frames(graphik, monkeypatch, [True, True, False, True], calls)
+    assert calls == [True]  # only the fresh press in the last frame
+
+
+@pytest.mark.parametrize(
+    "presses, expected",
+    [
+        pytest.param([False, True, False, False, False, True, False], 2, id="down_then_up"),
+        pytest.param([False, True, True, True], 1, id="held"),
+        pytest.param([False, False, True, False, True], 2, id="up_first"),
+    ],
+)
+def test_frames_that_never_call_end_frame_still_click_correctly(monkeypatch, presses, expected):
+    # An exception or early return can skip endFrame; clicks must not get
+    # stuck firing every frame, or never.
+    graphik = _make_graphik((40, 40))
+    calls = []
+    monkeypatch.setattr(pygame.mouse, "get_pos", lambda: (15, 15))
+    for down in presses:
+        _press(monkeypatch, down)
+        graphik.beginFrame()
+        _drawGo(graphik, calls)
+    assert len(calls) == expected
+
+
+def test_a_draw_after_end_frame_does_not_fire_the_same_press_again(monkeypatch):
+    graphik = _make_graphik((40, 40))
+    calls = []
+    _frames(graphik, monkeypatch, [False], calls)
+    _press(monkeypatch, True)
+    graphik.beginFrame()
+    _drawGo(graphik, calls)
+    graphik.endFrame()
+    _drawGo(graphik, calls)
+    assert calls == [True]
+
+
+def test_a_nested_loop_inside_the_callback_does_not_get_the_press(monkeypatch):
+    graphik = _make_graphik((40, 40))
+    outer, inner = [], []
+    _frames(graphik, monkeypatch, [False], [])
+    _press(monkeypatch, True)
+
+    def openNestedScreen():
+        outer.append(True)
+        for _ in range(2):  # the nested screen's own frames, press still held
+            graphik.beginFrame()
+            _drawGo(graphik, inner)
+            graphik.endFrame()
+
+    graphik.beginFrame()
+    graphik.drawButton(10, 10, 20, 20, Graphik.blue, Graphik.white, 10, "", openNestedScreen)
+    _drawGo(graphik, outer)  # a later button in the outer frame
+    graphik.endFrame()
+    assert outer == [True]
+    assert inner == []
+
+
+def test_a_press_that_slides_onto_a_button_does_not_fire(monkeypatch):
+    graphik = _make_graphik((40, 40))
+    calls = []
+    _frames(graphik, monkeypatch, [False, True], calls, pos=(35, 35))
+    _frames(graphik, monkeypatch, [True, True], calls, pos=(15, 15))
+    assert calls == []
+
+
+def test_a_failed_begin_frame_does_not_switch_to_press_only_clicks(monkeypatch):
+    graphik = _make_graphik((40, 40))
+    calls = []
+
+    def broken():
+        raise pygame.error("video system not initialized")
+
+    monkeypatch.setattr(pygame.mouse, "get_pressed", broken)
+    with pytest.raises(pygame.error):
+        graphik.beginFrame()
+    # Still the original mode: a held press fires on every call.
+    monkeypatch.setattr(pygame.mouse, "get_pos", lambda: (15, 15))
+    _press(monkeypatch, True)
+    _drawGo(graphik, calls)
+    _drawGo(graphik, calls)
+    assert calls == [True, True]
+
+
+def test_hover_on_a_surface_mapped_int_color_keeps_its_hue(monkeypatch):
+    graphik = _make_graphik((40, 40))
+    display = graphik.getGameDisplay()
+    mapped = display.map_rgb((0, 0, 200))
+    monkeypatch.setattr(pygame.mouse, "get_pos", lambda: (15, 15))
+    _press(monkeypatch, False)
+    _drawGo(graphik, [], color=mapped)
+    assert _rgb(display, (15, 15)) == BLUE_HOVER
+
+
+def test_hover_color_darkens_a_light_color_name():
+    assert Graphik._hoverColor("gray60") == pygame.Color(128, 128, 128, 255)

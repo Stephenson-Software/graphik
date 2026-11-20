@@ -1,77 +1,61 @@
 # Releasing graphik
 
-graphik is published to [PyPI](https://pypi.org/) via **Trusted Publishing**
-(OIDC) — no API token is stored in this repository. Publishing is automated by
-[`.github/workflows/publish.yml`](.github/workflows/publish.yml), which runs
-when a version tag (`vX.Y.Z`) is pushed.
+graphik is released as **git tags**. It isn't published to PyPI. Consumers
+install a release from the tag's source archive on GitHub:
 
-## One-time setup (maintainer)
+```
+graphik @ https://github.com/Stephenson-Software/graphik/archive/refs/tags/v0.3.0.zip
+```
 
-These steps are prerequisites for the workflow to succeed and are done outside
-this repository:
-
-1. **Claim the project name on PyPI.** Register `graphik` (the
-   [`pyproject.toml`](pyproject.toml) `name`). `preponderous-graphik` is the
-   namespaced fallback if the name is unavailable.
-2. **Configure a Trusted Publisher** on the PyPI project pointing at this repo:
-   - Owner: `Stephenson-Software`
-   - Repository: `graphik`
-   - Workflow filename: `publish.yml`
-   - Environment name: `pypi`
-3. **Create a GitHub environment** named `pypi` (Settings → Environments). An
-   optional required-reviewer rule can be added there to gate each release.
+pip downloads the archive and builds the wheel locally with setuptools, using
+[`pyproject.toml`](pyproject.toml). This needs access to GitHub but not `git`,
+which matters for players installing a game from source on Windows. (The
+`git+https://...@v0.3.0` form also works where `git` is installed.)
 
 ## Cutting a release
 
-1. Bump the single version source —
+1. Bump the single version source,
    [`src/main/python/preponderous/graphik/_version.py`](src/main/python/preponderous/graphik/_version.py)
-   (`__version__`). Every other version reference is derived from it.
-2. Commit the bump and merge it to `main`.
-3. Tag the release commit and push the tag:
+   (`__version__`). Every other version reference is derived from it. Use three
+   dot-separated parts (`0.3.0`), with no `.dev` suffix for a release.
+2. Merge the bump to `main`, with green CI. The *Install from a release
+   archive* job in `test.yml` has already installed and drawn with an archive
+   built the same way as the tag's.
+3. Tag the merge commit as `v` + `__version__`, push the tag, and create a
+   GitHub release for it:
 
    ````bash
-   git tag v0.2.0
-   git push origin v0.2.0
+   git tag -a v0.3.0 -m "graphik 0.3.0" <merge-sha>
+   git push origin v0.3.0
+   gh release create v0.3.0 --verify-tag --notes "<changes>"
    ````
 
-4. The `Publish to PyPI` workflow then:
-   - verifies the tag matches `__version__` (a mismatch fails the build),
-   - builds the sdist and wheel,
-   - smoke-tests the built wheel: installs it, runs `import preponderous.graphik`,
-     and checks `__version__` against the tag. `Graphik` itself is imported
-     lazily on first access, so this step never loads `graphik.py` or
-     `pygame` — a wheel with a missing or broken `graphik.py`, or without a
-     working `pygame` dependency, would still pass it
-     (tracked in
-     [#46](https://github.com/Stephenson-Software/graphik/issues/46)),
-   - publishes to PyPI via Trusted Publishing.
+4. Check that the tag installs and imports in a clean environment:
 
-The tag must equal `v` + `__version__` (e.g. `__version__ = "0.2.0"` → tag
-`v0.2.0`), and `__version__` must have at least three dot-separated parts,
-because the trigger in `publish.yml` is the glob `v*.*.*`, which needs two dots
-after the `v`. A tag that matches the trigger but whose version does not match
-`__version__` fails the build before anything is published. A tag that does
-not match the trigger fails silently instead: the workflow never runs and
-nothing reports the missed release. That covers a tag **without** the `v`
-prefix, and also a `v`-prefixed tag with fewer than three parts such as
-`v1.0` — even when it equals `v` + `__version__`. (The `v0.1` tag on this
-repository is of that shape, and would not trigger the workflow either.) The
-`0.2.0` and `0.3.0.dev20260808` tags were pushed without the prefix, so the
-publish workflow has never run (tracked in
-[#34](https://github.com/Stephenson-Software/graphik/issues/34)).
+   ````bash
+   python -m venv /tmp/g && /tmp/g/bin/pip install "graphik @ https://github.com/Stephenson-Software/graphik/archive/refs/tags/v0.3.0.zip"
+   SDL_VIDEODRIVER=dummy /tmp/g/bin/python -c "from preponderous.graphik import Graphik, __version__; print(__version__)"
+   ````
 
-## Installing (after the first publish)
+5. Open a pull request in each repository in the README's
+   [Dependents](README.md#dependents) list that bumps the tag in its
+   `requirements.txt`.
 
-Once the package is live on PyPI, consumers can replace their vendored copies
-with a versioned dependency:
+A released tag must never be moved or deleted: consumers' installs resolve it
+by name, so moving it would change what they install without any change on
+their side.
 
-````bash
-pip install graphik
-````
+## Earlier tags
 
-```python
-from preponderous.graphik import Graphik
-```
+`v0.1`, `0.2.0` and `0.3.0.dev20260808` were pushed before this process. The
+last two have no `v` prefix. `v0.3.0` is the first release under it.
 
-Migrating the existing consumers (Roam, Apex, Ophidian, Patchwork, Tic-Tak-Toe)
-off their vendored copies is tracked as follow-up work in the consumer repos.
+## PyPI (not in use)
+
+[`.github/workflows/publish.yml`](.github/workflows/publish.yml) can build and
+publish to PyPI with Trusted Publishing, but it runs only when started by hand
+(`workflow_dispatch`). No PyPI project is set up. To turn it on: claim the
+`graphik` name on PyPI (`preponderous-graphik` as a fallback), add a Trusted
+Publisher for owner `Stephenson-Software`, repository `graphik`, workflow
+`publish.yml`, environment `pypi`, create the `pypi` environment in this
+repository's settings, then run the workflow against a `v` tag.

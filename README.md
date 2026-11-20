@@ -3,17 +3,30 @@
 
 This library assists developers with graphics programming.
 
+![Rectangles, centred text, a button and an image drawn with graphik](docs/images/hero.png)
+
+*Every draw method, rendered by graphik itself (`scripts/make_readme_images.py`).*
+
 ## Installation
-`graphik` has not been published to PyPI yet (see [RELEASING.md](RELEASING.md)
-for the release process), so `pip install graphik` will not resolve until the
-first release is published. Until then, install directly from this repository:
+graphik is released as git tags, not on PyPI. Install a release from its tag's
+archive (no `git` needed):
 ```bash
-pip install git+https://github.com/Stephenson-Software/graphik.git
+pip install "graphik @ https://github.com/Stephenson-Software/graphik/archive/refs/tags/v0.3.0.zip"
 ```
-Once a release is published, it will be installable with:
-```bash
-pip install graphik
-```
+In a `requirements.txt`, use the same line without the quotes. See
+[RELEASING.md](RELEASING.md) for how releases are cut.
+
+## Dependents
+These games use graphik. When a release goes out, each one gets a pull request
+that bumps the tag in its `requirements.txt`:
+
+| Game | Repository |
+|---|---|
+| Roam | [Preponderous-Software/roam](https://github.com/Preponderous-Software/roam) |
+| Ophidian | [Preponderous-Software/ophidian](https://github.com/Preponderous-Software/ophidian) |
+| Apex | [Preponderous-Software/apex](https://github.com/Preponderous-Software/apex) |
+| Rock Paper Scissors 2D | [Stephenson-Software/Rock-Paper-Scissors-2D](https://github.com/Stephenson-Software/Rock-Paper-Scissors-2D) |
+| Tic Tak Toe | [Stephenson-Software/Tic-Tak-Toe](https://github.com/Stephenson-Software/Tic-Tak-Toe) |
 
 ## Usage
 ```python
@@ -30,12 +43,14 @@ while running:
         if event.type == pygame.QUIT:
             running = False
 
+    graphik.beginFrame()  # optional: buttons fire once per click instead of while held
     gameDisplay.fill(Graphik.black)
     graphik.drawRectangle(100, 100, 200, 50, Graphik.blue)
     graphik.drawText("Hello, world!", 200, 125, 24, Graphik.white)
     graphik.drawButton(100, 200, 200, 50, Graphik.green, Graphik.black, 24, "Click me", lambda: print("clicked"))
     graphik.drawImage("path/to/image.png", 100, 300, 200, 200)  # replace with a real image file
     pygame.display.update()
+    graphik.endFrame()
 
 pygame.quit()
 ```
@@ -48,7 +63,13 @@ Public `Graphik` methods:
 - `getVersion()` — returns the installed graphik version string.
 - `drawRectangle(xpos, ypos, width, height, color)` — `xpos`/`ypos` are the rectangle's top-left corner.
 - `drawText(text, xpos, ypos, size, color)` — `xpos`/`ypos` are the **center** of the rendered text, not its top-left corner. This differs from `drawRectangle`, `drawButton` and `drawImage`, which all position their top-left corner at the given coordinates. Glyph edges are antialiased, blending with whatever is already on the surface. The text is always rendered as a single line — a `"\n"` is not a line break, so multi-line text needs one call per line — and a null character (`"\0"`) raises `ValueError` before anything is painted.
-- `drawButton(xpos, ypos, width, height, colorBox, colorText, sizeText, text, function)` — draws a rectangle and centered text, and calls `function()` on every call where the mouse is held inside the button with button 1 down (there is no click-edge detection, so a held-down mouse fires `function()` once per call, not once per click). Callers wanting once-per-click semantics must debounce on their side. The clickable region is exactly the drawn box — `xpos` through `xpos + width - 1`, and `ypos` through `ypos + height - 1` — so buttons laid out edge to edge share no clickable coordinate. The hit test uses `pygame.mouse.get_pos()`, which is in window coordinates, so this only holds when the `Graphik` is bound to the display itself (or another surface whose top-left sits at the window's origin): bound to a subsurface or an off-screen surface blitted elsewhere, the box is painted at that surface's position but stays clickable at `xpos`/`ypos` relative to the window. The label is not clipped to the box: one too large for it overflows past the box edges, and that overflow is painted but not clickable. Reading the mouse needs the video system, so unlike `drawRectangle` and `drawText` it raises `pygame.error` (after painting) when neither `pygame.init()` nor `pygame.display.init()` has been called, even for an off-screen surface; no display mode is needed.
+- `beginFrame()` — call once at the top of each frame to make `drawButton` fire once per click instead of while held. Calling it again in the same frame does nothing, so nested screens can each call it. A press that is already held when the first `beginFrame()` runs, or that slides onto a button while held, doesn't count, and each press fires at most one button.
+- `endFrame()` — call once at the end of each frame started with `beginFrame()`. A frame that misses it (an exception, an early return) doesn't leave clicks stuck: the next `beginFrame()` notices the mouse button changed and takes a new snapshot.
+- `drawButton(xpos, ypos, width, height, colorBox, colorText, sizeText, text, function)` — draws a rectangle and centered text, and calls `function()` when the button is clicked. By default it fires on every call where the mouse is held inside the button with button 1 down (once per call, not once per click), as earlier versions did. After the first `beginFrame()` call on the instance, it fires once per click instead: only in the frame where button 1 goes down inside the button. While the mouse is over the box, the box is drawn in a lifted color (light colors darken by 25, dark ones lighten by 35, per channel, clamped; the label color is unchanged), so it reads as clickable. The clickable region is exactly the drawn box — `xpos` through `xpos + width - 1`, and `ypos` through `ypos + height - 1` — so buttons laid out edge to edge share no clickable coordinate. The hit test uses `pygame.mouse.get_pos()`, which is in window coordinates, so this only holds when the `Graphik` is bound to the display itself (or another surface whose top-left sits at the window's origin): bound to a subsurface or an off-screen surface blitted elsewhere, the box is painted at that surface's position but stays clickable at `xpos`/`ypos` relative to the window. The label is not clipped to the box: one too large for it overflows past the box edges, and that overflow is painted but not clickable. Reading the mouse needs the video system, so unlike `drawRectangle` and `drawText` it raises `pygame.error` (after painting) when neither `pygame.init()` nor `pygame.display.init()` has been called, even for an off-screen surface; no display mode is needed.
+
+  ![Buttons with the mouse away and over them](docs/images/hover.png)
+
+  *The hover lift, rendered by `scripts/make_readme_images.py`.*
 - `drawImage(filePath, xpos, ypos, width, height)` — caches the loaded and scaled surface by `filePath`, so an image edited on disk mid-run will not be picked up until the process restarts. `filePath` may be a `str` or a `pathlib.Path`, and is used as the key exactly as given: two spellings of one file (relative and absolute, or a `str` and a `Path`) are cached, and loaded, separately. Only the most recently requested size is kept per path, so drawing the same file at two alternating sizes rescales it on every call. Unlike the other draw methods, it raises `pygame.error` unless a display mode has been set with `pygame.display.set_mode`, even when the `Graphik` is bound to an off-screen surface. Only the first load of a path needs one: a path already in the cache keeps drawing to an off-screen surface with no display mode set.
 
 Positions passed to the draw methods need not lie on the surface: anything drawn across its edge (including at negative coordinates) is clipped to it, with the part that falls off simply not painted — nothing raises, and nothing is shifted to fit.
@@ -75,10 +96,13 @@ source .venv/bin/activate
 pip install -e ".[test]"
 pytest
 ```
-The suite is headless: `src/test/python/conftest.py` sets `SDL_VIDEODRIVER`/`SDL_AUDIODRIVER` to `dummy` before pygame touches a display, so no window is created and the tests run on a machine with no display attached. `pytest` alone works from the repo root because `[tool.pytest.ini_options]` in `pyproject.toml` points `testpaths` at `src/test/python` and `pythonpath` at `src/main/python`. `.github/workflows/test.yml` runs the same `pip install -e ".[test]"` + `pytest` sequence — preceded by a compile check and an import smoke test, across the supported Python versions — on every pull request and on every push to `main`. A push to a branch with no open pull request is not covered, so run `pytest` locally before opening one.
+The suite is headless: `src/test/python/conftest.py` sets `SDL_VIDEODRIVER`/`SDL_AUDIODRIVER` to `dummy` before pygame touches a display, so no window is created and the tests run on a machine with no display attached. `pytest` alone works from the repo root because `[tool.pytest.ini_options]` in `pyproject.toml` points `testpaths` at `src/test/python` and `pythonpath` at `src/main/python`. `.github/workflows/test.yml` runs the same `pip install -e ".[test]"` + `pytest` sequence — preceded by a compile check and an import smoke test, across the supported Python versions — on every pull request and on every push to `main`. A second job, *Install from a release archive*, packs the commit the way GitHub serves a tag's archive, installs it into a fresh venv as a consumer would, and draws with it. A push to a branch with no open pull request is not covered, so run `pytest` locally before opening one.
+
+The README images are generated, not hand-made. After changing how something draws, regenerate them with
+`SDL_VIDEODRIVER=dummy python scripts/make_readme_images.py` and commit the updated `docs/images/*.png`.
 
 ## Projects
-[Projects that utilize this library](https://github.com/Stephenson-Software/graphik/wiki/Projects)
+The games that use graphik are listed under [Dependents](#dependents) above.
 
 ## 📄 License
 
