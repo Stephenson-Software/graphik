@@ -1,6 +1,6 @@
 # Runs the test suite on every push and pull request so regressions are
 # caught before merge, rather than relying solely on manual local validation.
-# See RELEASING.md / publish.yml for the separate publish-on-tag workflow.
+# See RELEASING.md for releases; publish.yml (manual-only PyPI publish) is separate.
 name: Test
 
 on:
@@ -54,3 +54,54 @@ jobs:
           SDL_VIDEODRIVER: dummy
           SDL_AUDIODRIVER: dummy
         run: python -m pytest
+
+  archive-install:
+    # Consumers install graphik from a release tag's source archive, e.g.
+    #   graphik @ https://github.com/Stephenson-Software/graphik/archive/refs/tags/v0.3.0.zip
+    # (see RELEASING.md). This job builds the same kind of archive from the
+    # commit under test -- a zip with one top-level graphik-<version>/ folder,
+    # as GitHub serves it -- installs it into a fresh venv the way a consumer's
+    # `pip install -r requirements.txt` would, and draws with it. Unlike an
+    # import of the package alone, drawing loads graphik.py and pygame, so a
+    # build that dropped either fails here. An archive install never calls git.
+    name: Install from a release archive
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Build a GitHub-style source archive
+        run: |
+          VERSION="$(python -c 'import sys; sys.path.insert(0, "src/main/python"); from preponderous.graphik._version import __version__; print(__version__)')"
+          git archive --format=zip --prefix="graphik-${VERSION}/" -o "$RUNNER_TEMP/graphik.zip" HEAD
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+
+      - name: Install the archive into a fresh venv
+        run: |
+          python -m venv "$RUNNER_TEMP/consumer"
+          "$RUNNER_TEMP/consumer/bin/python" -m pip install --upgrade pip
+          "$RUNNER_TEMP/consumer/bin/python" -m pip install "graphik @ file://$RUNNER_TEMP/graphik.zip"
+
+      - name: Import and draw with the installed package
+        # Run from outside the checkout so only the installed copy is importable.
+        working-directory: ${{ runner.temp }}
+        env:
+          SDL_VIDEODRIVER: dummy
+          SDL_AUDIODRIVER: dummy
+        run: |
+          "$RUNNER_TEMP/consumer/bin/python" - <<'PY'
+          import os
+          import pygame
+          import preponderous.graphik as package
+          from preponderous.graphik import Graphik
+
+          assert package.__version__ == os.environ["VERSION"], package.__version__
+          assert "site-packages" in package.__file__, package.__file__
+          surface = pygame.Surface((20, 20))
+          Graphik(surface).drawRectangle(2, 2, 10, 10, Graphik.red)
+          assert tuple(surface.get_at((5, 5)))[:3] == Graphik.red
+          print("installed graphik", package.__version__, "draws OK from", package.__file__)
+          PY

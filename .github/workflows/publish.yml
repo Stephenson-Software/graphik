@@ -1,13 +1,15 @@
-# Builds the sdist/wheel and publishes graphik to PyPI when a version tag is
-# pushed. Publishing uses PyPI Trusted Publishing (OIDC) -- no API token is
-# stored in the repo. See RELEASING.md for the one-time PyPI configuration and
-# the release procedure.
+# Builds the sdist/wheel and publishes graphik to PyPI. Publishing uses PyPI
+# Trusted Publishing (OIDC) -- no API token is stored in the repo.
+#
+# Manual only: graphik is released as git tags that consumers install from the
+# tag's source archive (see RELEASING.md), and no PyPI project is set up. The workflow is
+# kept so PyPI can be turned on later: do the one-time setup it needs, then
+# run it from the Actions tab against a v-tag (the tag check below compares
+# the ref name with __version__).
 name: Publish to PyPI
 
 on:
-  push:
-    tags:
-      - "v*.*.*"
+  workflow_dispatch:
 
 # Least privilege by default; the publish job opts into id-token below.
 permissions:
