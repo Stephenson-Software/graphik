@@ -11,7 +11,7 @@ This library assists developers with graphics programming.
 graphik is released as git tags, not on PyPI. Install a release from its tag's
 archive (no `git` needed):
 ```bash
-pip install "graphik @ https://github.com/Stephenson-Software/graphik/archive/refs/tags/v0.5.1.zip"
+pip install "graphik @ https://github.com/Stephenson-Software/graphik/archive/refs/tags/v0.5.2.zip"
 ```
 In a `requirements.txt`, use the same line without the quotes. See
 [RELEASING.md](RELEASING.md) for how releases are cut.
@@ -95,7 +95,7 @@ and runs on Linux and Windows desktops, and in the browser under pygbag
 (see [In the browser](#in-the-browser)):
 
 ```bash
-pip install "graphik[strata] @ https://github.com/Stephenson-Software/graphik/archive/refs/tags/v0.5.1.zip"
+pip install "graphik[strata] @ https://github.com/Stephenson-Software/graphik/archive/refs/tags/v0.5.2.zip"
 ```
 
 ```python
@@ -133,6 +133,8 @@ So that games stop hand-building the same pieces:
 - **Bigger boards.** `GridBoard(columns, rows, theme, tiles=..., mergeTiles=True, viewport=...)`: `tiles` maps a cell to its own `Tile(color, raised)`; `mergeTiles` draws each row's neighbouring tiles that look the same as one box (a 64 x 64 board of one colour is 64 boxes, not 4096); `viewport=Viewport.around(column, row, reach)` draws only a window of the board, framed and fitted as if it were the whole board, with pieces and picking still in whole-board cells.
 - **Hover.** `board.scene(..., highlight=(column, row))` lays a thin slab in `Theme.highlight` on the tile under the pointer.
 - **Chains.** `board.bridgePairs(pieces)` names the joined pieces and `board.bridgeShape(a, b, aAt, bAt)` draws one bridge.
+- **Phones held upright.** Since 0.5.2 `fitCamera` frames a portrait window (aspect below 1) for its shape: the camera looks down more steeply (70 degrees rather than about 55), the board fills the window's width and stands in the middle of the space below a HUD, and a large board no longer runs off the sides. Landscape and square windows keep 0.5.1's framing exactly; between an aspect of 0.8 and 1 the two blend, so a resize across square doesn't jump. `fitCamera(columns, rows, aspect, top=..., bottom=...)` (and `board.camera`, `board.scene`) keep fractions of the window's height clear at the top (a HUD) and the bottom (a bar of touch keys), in any window shape; a view takes them in pixels with `view.setInsets(top=..., bottom=...)`, and picking, `cellScreenPosition` and the web view's camera follow.
+- **On-screen keys for touch screens.** `TouchKeys([TouchKey("Pause", "space"), TouchKey("Shop", "p"), ...])` lays out a bar of labelled buttons along the bottom of the screen, each at least 44 CSS pixels each way, in rows of equal buttons (up to three rows on a portrait screen, one on a landscape one; when the keys don't all fit, the last button is *More*, which pages through the rest). A tap on one, `keys.press(position, width, height, pygame, scale)`, posts the same `KEYDOWN` and `KEYUP` the keyboard would (marked `touchKey=True`), so the game's own key handling does the work in both views; a press off the bar returns `None` and is the game's. The 2D view draws the bar with `keys.draw(graphik, width, height, scale)`, the 3D view adds `keys.overlay(width, height)` (labels and panels) to its HUD, both from one `keys.layout(...)` and one hit test. Sizes are worked out in CSS pixels: `scale` is the surface's CSS pixels per pixel (1 for the web view; for a 2D canvas the browser scales, see `keys.below(width, height, pageWidth, pageHeight)`, which gives the band to add under a 2D board and the canvas's scale). `keys.bandHeight(...)` is how much of the screen the bar takes, for `view.setInsets(bottom=...)` and the HUD. Show the keys only on touch screens: `grid3d.web.touchScreen()` is true when the page sees a coarse pointer or a touch (`?touch=1` or `?touch=0` in the address says so for testing; `GRAPHIK_TOUCH=1` outside a browser).
 
 ### In the browser
 

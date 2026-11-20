@@ -35,7 +35,9 @@ says ?view=2d, or the player last chose 2D on the button (remembered). The
 game keeps its 2D canvas, and the page says why, whenever the 3D view can't
 start; a page starting in 2D fetches nothing of the 3D view until the
 button is pressed. The button sits in the page's top right corner;
-buttonArea() says where, so a game's HUD can stay out from under it.
+buttonArea() says where, so a game's HUD can stay out from under it, and
+touchScreen() whether the page is on a touch screen, where a game shows its
+on-screen keys (touchkeys.py).
 
 Pure Python (struct, base64, json); pygbag's `platform` only in a browser.
 """
@@ -415,6 +417,22 @@ def buttonArea():
         return None
 
 
+def touchScreen():
+    """True when the page is on a touch screen (a phone, a tablet), where
+    a game shows its on-screen keys (touchkeys.TouchKeys): the template's
+    Graphik3D.touch() says so for a coarse pointer, once the page has seen
+    a touch, or when the address says ?touch=1 (?touch=0 says not). False
+    outside a browser, unless the GRAPHIK_TOUCH environment variable is 1
+    (for trying the keys on a desktop), and on a page without the button."""
+    toggle = pageObject("Graphik3D")
+    if toggle is None:
+        return sys.platform != "emscripten" and os.environ.get("GRAPHIK_TOUCH") == "1"
+    try:
+        return bool(int(toggle.touch()))
+    except Exception:  # an older template, without touch()
+        return False
+
+
 def set3D(on, reason=""):
     """Turns the page's 3D toggle on or off (off with a `reason` marks it
     unavailable, e.g. after Unavailable). Does nothing outside a browser."""
@@ -533,9 +551,11 @@ class Grid3DWebView(ViewGeometry):
         if self.board is None:
             raise RuntimeError("setBoard() must come before drawing")
         now = self.clock() if now is None else now
+        top, bottom = self.insetFractions()
         return self.board.scene(self.pieces, positions=self.animator.positions(now),
                                 labels=self.labels, panels=self.panels, lights=self.boardLights,
-                                aspect=self.width / float(self.height), tint=self.boardTint)
+                                aspect=self.width / float(self.height), tint=self.boardTint,
+                                top=top, bottom=bottom)
 
     def frame(self, now=None, present=True):
         """Nothing to do per frame: the relay draws on the page's own frames."""
@@ -570,6 +590,14 @@ class Grid3DWebView(ViewGeometry):
     def resize(self, width, height):
         self.width, self.height = width, height
         self._sendView()
+
+    def setInsets(self, top=None, bottom=None):
+        """As Grid3DView's (ViewGeometry.setInsets); the page is sent the
+        new camera at once."""
+        changed = super().setInsets(top, bottom)
+        if changed:
+            self._sendView()
+        return changed
 
     def savePng(self, path):
         raise Unavailable("screenshots of the web view are taken by the page (canvas.toBlob)")
