@@ -26,9 +26,10 @@ events, so a game's 2D input handling works unchanged in 3D.
 
 The page: TEMPLATE (templatePath()) is a pygbag page template carrying the
 relay's canvas and scripts and a 3D toggle. Build with
-`pygbag --template <templatePath()> ...` and put the relay's build
-(grid-relay-scene.js and .wasm, strata-loader.js, strata-kit.js,
-grid-relay.js, from Strata's web kit) next to the built page. Nothing of
+`pygbag --template <templatePath()> ...`, then copy the relay's prebuilt
+files from Strata's release next to the built page with relay.py
+(`python -m preponderous.graphik.grid3d.relay --strata <version> --dest
+build/web`). Nothing of
 the 3D view is downloaded until the player asks for it, and the game keeps
 its 2D canvas whenever the 3D view can't load.
 

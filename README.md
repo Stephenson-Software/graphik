@@ -140,7 +140,18 @@ Under [pygbag](https://pypi.org/project/pygbag/) (`sys.platform == "emscripten"`
 
 - `view.ready` turns true once the page has loaded the 3D view; `view.failure()` says why it couldn't. `open()` raises `Unavailable` on a page without the relay.
 - `view.pollEvents()` returns Strata-style events (keys with desktop Strata's scancodes, mouse, wheel, resize, and `FINGER_*` for touch), and `grid3d.web.toPygameEvents(events, pygame)` turns them into pygame events, so a game's 2D input code runs unchanged. It converts desktop Strata events too.
-- The page: build with `pygbag --template <grid3d.web.templatePath()> ...`, a copy of pygbag 0.9.3's default template with the relay's canvas and scripts and a **3D** button. Put the relay's build from Strata's web kit (`grid-relay-scene.js`, `grid-relay-scene.wasm`, `strata-loader.js`, `strata-kit.js`, `grid-relay.js`) next to the built page. Nothing of the 3D view is downloaded until the player presses the button; the 2D canvas stays on screen while it loads and whenever it can't (too big, no WebGL 2), and the button then says so. `grid3d.web.wants3D()` tells the game the button is on, and `set3D(False, reason)` turns it off.
+- The page: build with `pygbag --template <grid3d.web.templatePath()> ...`, a copy of pygbag 0.9.3's default template with the relay's canvas and scripts and a **3D** button. The relay has to be served with the game (a browser can't fetch GitHub release assets cross-origin): `python -m preponderous.graphik.grid3d.relay --strata 0.9.0 --dest <pygbag output>` downloads Strata's `strata-<version>-wasm32-emscripten.tar.gz`, checks it against the release's `SHA256SUMS` and copies its prebuilt `kit/grid-relay/dist/` next to the page, leaving files already there (pygbag's `index.html`) alone. Nothing of the 3D view is downloaded until the player presses the button; the 2D canvas stays on screen while it loads and whenever it can't (too big, no WebGL 2), and the button then says so. `grid3d.web.wants3D()` tells the game the button is on, and `set3D(False, reason)` turns it off.
+
+In a game's `browser.yml`, where graphik is installed into `src/` for pygbag:
+
+```yaml
+      - name: Build with pygbag, on graphik's 3D page template
+        run: |
+          TEMPLATE="$(PYTHONPATH=src python -c 'from preponderous.graphik.grid3d.web import templatePath; print(templatePath())')"
+          python -m pygbag --build --template "$TEMPLATE" --title "My game" src
+      - name: Add Strata's grid relay next to the page
+        run: PYTHONPATH=src python -m preponderous.graphik.grid3d.relay --strata 0.9.0 --dest src/build/web
+```
 
 ## Dependencies
 - pygame

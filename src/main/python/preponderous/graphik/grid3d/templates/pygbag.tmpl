@@ -435,8 +435,10 @@ frameborder="1"
      preponderous.graphik.grid3d.web, and a toggle between the 2D and 3D views.
      Nothing of the 3D view is downloaded until the toggle is pressed; while it
      loads, and whenever it can't (too big, no WebGL 2, the engine failed), the
-     2D canvas stays on screen. Put the relay's build (grid-relay-scene.js and
-     .wasm, strata-loader.js, strata-kit.js, grid-relay.js) next to this page. -->
+     2D canvas stays on screen. The relay's files (grid-relay-scene.js and
+     .wasm, strata-loader.js, strata-kit.js, grid-relay.js) go next to this
+     page: `python -m preponderous.graphik.grid3d.relay` copies them from
+     Strata's release at build time. -->
 <canvas id="relay" hidden tabindex="0" style="position:fixed;inset:0;width:100vw;height:100vh;z-index:6;touch-action:none"></canvas>
 <button id="graphik3d" type="button" aria-pressed="false" title="Show the board in 3D"
     style="position:fixed;top:8px;right:8px;z-index:10;font:bold 14px sans-serif;padding:6px 12px;min-width:44px;min-height:36px;border-radius:6px;border:1px solid #444;background:#222;color:#eee;opacity:0.85">3D</button>
