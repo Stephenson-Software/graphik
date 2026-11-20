@@ -121,6 +121,9 @@ class Theme:
             )
 
 
+_NOT_GIVEN = object()
+
+
 @dataclass(frozen=True)
 class Tile:
     """One cell's own tile (GridBoard's `tiles`): a 0-1 (r, g, b) colour, and
@@ -176,7 +179,8 @@ class GridBoard:
     """A columns x rows board drawn with a Theme.
 
     `tiles` maps (column, row) to a Tile (or a 0-1 colour) for cells whose
-    tile isn't the theme's checker; the others keep it. `mergeTiles` draws
+    tile isn't the theme's checker; the others keep it, and a cell mapped
+    to None has no tile at all. `mergeTiles` draws
     each run of neighbouring tiles in a row that look the same (colour and
     raise, after any tint) as one stretched box, so a big board costs a
     shape per run, not per cell. `viewport` (a Viewport) draws only that
@@ -243,10 +247,13 @@ class GridBoard:
     # -- the static part
 
     def tileAt(self, column, row):
-        """The Tile drawn on a visible cell (before any tint)."""
+        """The Tile drawn on a visible cell (before any tint), or None when
+        the board's `tiles` leave the cell bare."""
         t = self.theme
-        own = None if self.tiles is None else self.tiles.get((column, row))
-        if own is not None:
+        own = _NOT_GIVEN if self.tiles is None else self.tiles.get((column, row), _NOT_GIVEN)
+        if own is None:
+            return None
+        if own is not _NOT_GIVEN:
             return own if isinstance(own, Tile) else Tile(tuple(own))
         if t.alternate is not None and (column + row) % 2:
             return Tile(t.alternate)
@@ -271,12 +278,12 @@ class GridBoard:
             run = None  # [first column, last column, color, raised]
             for shownColumn in range(columns):
                 column = originColumn + shownColumn
-                if not self.contains(column, row):
+                tile = self.tileAt(column, row) if self.contains(column, row) else None
+                if tile is None:
                     if run is not None:
                         shapes.append(self._tileShape(run, row, edge))
                         run = None
                     continue
-                tile = self.tileAt(column, row)
                 color = tile.color
                 if tint is not None:
                     color = tuple(

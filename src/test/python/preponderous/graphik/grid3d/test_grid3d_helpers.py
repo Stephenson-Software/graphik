@@ -2,8 +2,6 @@
 the board's options (own tiles, merged tiles, a viewport, the hover slab,
 bridge pairs). Pure Python, no GPU."""
 
-import math
-
 import pytest
 
 from preponderous.graphik import Graphik
@@ -203,6 +201,9 @@ def test_a_boards_own_tiles_colour_and_raise_their_cells():
     # a plain colour works as a tile too; cells left out keep the checker
     mixed = GridBoard(2, 1, Theme(frame=None), tiles={(1, 0): (1.0, 0.0, 0.0)})
     assert [s.color[:3] for s in mixed.boardShapes()] == [Theme().tile, (1.0, 0.0, 0.0)]
+    # and a cell mapped to None is left bare
+    bare = GridBoard(3, 1, Theme(frame=None), tiles={(1, 0): None}, mergeTiles=True)
+    assert [s.position[0] for s in bare.boardShapes()] == [-1.0, 1.0]
 
 
 def test_without_options_a_board_draws_as_in_0_4_0():
