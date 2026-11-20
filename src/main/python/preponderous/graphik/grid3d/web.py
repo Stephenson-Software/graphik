@@ -29,9 +29,13 @@ relay's canvas and scripts and a 3D toggle. Build with
 `pygbag --template <templatePath()> ...`, then copy the relay's prebuilt
 files from Strata's release next to the built page with relay.py
 (`python -m preponderous.graphik.grid3d.relay --strata <version> --dest
-build/web`). Nothing of
-the 3D view is downloaded until the player asks for it, and the game keeps
-its 2D canvas whenever the 3D view can't load.
+build/web`). The page starts in 3D, loading the relay alongside pygbag,
+unless the game built it with templatePath(defaultView="2d"), the address
+says ?view=2d, or the player last chose 2D on the button (remembered). The
+game keeps its 2D canvas, and the page says why, whenever the 3D view can't
+start; a page starting in 2D fetches nothing of the 3D view until the
+button is pressed. The button sits in the page's top right corner;
+buttonArea() says where, so a game's HUD can stay out from under it.
 
 Pure Python (struct, base64, json); pygbag's `platform` only in a browser.
 """
@@ -41,6 +45,7 @@ import json
 import os
 import struct
 import sys
+import tempfile
 import time
 from types import SimpleNamespace
 
@@ -99,10 +104,32 @@ STATUS = {
 TEMPLATE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "templates", "pygbag.tmpl")
 
 
-def templatePath():
-    """The pygbag page template with the relay's canvas, scripts and the 3D
-    toggle (`pygbag --template <this> ...`)."""
-    return TEMPLATE
+DEFAULT_VIEW_ATTRIBUTE = 'data-default-view="3d"'
+VIEWS = ("2d", "3d")
+
+
+def templatePath(defaultView="3d"):
+    """The pygbag page template with the relay's canvas and the 2D/3D
+    button (`pygbag --template <this> ...`). The page starts in
+    `defaultView` ("3d", the default, or "2d") unless the address asks
+    for a view (?view=2d or ?view=3d) or the player chose one on the
+    button before (kept in the browser's localStorage). For "2d" a copy
+    of the template saying so is written to the temporary folder and its
+    path returned."""
+    view = str(defaultView).lower()
+    if view not in VIEWS:
+        raise ValueError("defaultView is '2d' or '3d', not %r" % (defaultView,))
+    if view == "3d":
+        return TEMPLATE
+    with open(TEMPLATE, encoding="utf-8") as handle:
+        page = handle.read()
+    if page.count(DEFAULT_VIEW_ATTRIBUTE) != 1:
+        raise RuntimeError("graphik's page template has no single default view to change")
+    page = page.replace(DEFAULT_VIEW_ATTRIBUTE, 'data-default-view="%s"' % view)
+    path = os.path.join(tempfile.gettempdir(), "graphik-pygbag-%s.tmpl" % view)
+    with open(path, "w", encoding="utf-8") as handle:
+        handle.write(page)
+    return path
 
 
 # -- the wire format (Strata's web/kit/grid-relay/WIRE.md, format 1.0)
@@ -281,7 +308,10 @@ class PlatformRelay:
         if relay is None:
             relay = pageObject("StrataGridRelay")
             if relay is None:
-                raise Unavailable("this page has no 3D view (grid-relay.js isn't loaded)")
+                raise Unavailable(
+                    "this page has no 3D view (grid-relay.js isn't loaded; on graphik's "
+                    "template it loads once the 3D toggle is on, when wants3D() turns true)"
+                )
         self.js = relay
 
     def request(self, options):
@@ -353,9 +383,36 @@ def pageObject(name):
 
 def wants3D():
     """True while the page's 3D toggle (the template's window.Graphik3D) is
-    on. False outside a browser or on a page without the toggle."""
+    on and the relay's scripts, fetched only once it is pressed, have
+    loaded, so Grid3DWebView.open() can begin. False outside a browser or
+    on a page without the toggle."""
     toggle = pageObject("Graphik3D")
     return bool(toggle is not None and int(toggle.wanted()))
+
+
+def parseArea(text):
+    """(x, y, width, height) from the template's "x,y,width,height", or
+    None for "" or anything else."""
+    try:
+        area = tuple(int(float(part)) for part in str(text).split(","))
+    except ValueError:
+        return None
+    return area if len(area) == 4 and area[2] > 0 and area[3] > 0 else None
+
+
+def buttonArea():
+    """Where the page's 2D/3D button sits, as (x, y, width, height) in CSS
+    pixels from the top left of the page (the units of Grid3DWebView's
+    labels and panels), for keeping HUD text out from under it; None
+    outside a browser, on a page without the button, or while it is
+    hidden. The template keeps it in the top right corner."""
+    toggle = pageObject("Graphik3D")
+    if toggle is None:
+        return None
+    try:
+        return parseArea(toggle.area())
+    except Exception:  # an older template, without area()
+        return None
 
 
 def set3D(on, reason=""):

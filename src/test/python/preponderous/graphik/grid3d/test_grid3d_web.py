@@ -390,6 +390,51 @@ def test_the_page_toggle_is_read_and_set_through_window_graphik3d(monkeypatch):
 def test_outside_a_browser_there_is_no_toggle():
     assert web.wants3D() is False
     web.set3D(True)  # does nothing
+    assert web.buttonArea() is None
+
+
+def test_the_buttons_area_is_read_from_the_page(monkeypatch):
+    class Toggle:
+        shown = "326,8,56,36"
+
+        def area(self):
+            return self.shown
+
+    toggle = Toggle()
+    monkeypatch.setattr(sys, "platform", "emscripten")
+    fake = types.ModuleType("platform")
+    fake.window = types.SimpleNamespace(Graphik3D=toggle)
+    monkeypatch.setitem(sys.modules, "platform", fake)
+    assert web.buttonArea() == (326, 8, 56, 36)
+    toggle.shown = ""  # hidden
+    assert web.buttonArea() is None
+
+
+def test_a_template_without_area_has_no_button_area(monkeypatch):
+    class OldToggle:
+        def area(self):
+            raise AttributeError("area")
+
+    monkeypatch.setattr(sys, "platform", "emscripten")
+    fake = types.ModuleType("platform")
+    fake.window = types.SimpleNamespace(Graphik3D=OldToggle())
+    monkeypatch.setitem(sys.modules, "platform", fake)
+    assert web.buttonArea() is None
+
+
+@pytest.mark.parametrize(
+    "text, area",
+    [
+        ("326,8,56,36", (326, 8, 56, 36)),
+        ("326.4,8.6,56,36", (326, 8, 56, 36)),
+        ("", None),
+        ("1,2,3", None),
+        ("1,2,0,4", None),
+        ("a,b,c,d", None),
+    ],
+)
+def test_parse_area(text, area):
+    assert web.parseArea(text) == area
 
 
 # -- pygame events
@@ -452,16 +497,109 @@ def test_desktop_strata_events_convert_too():
 # -- the page template
 
 
-def test_the_template_is_package_data_with_the_relay_and_a_3d_toggle():
+def templatePage():
     with open(web.templatePath(), encoding="utf-8") as handle:
-        page = handle.read()
+        return handle.read()
+
+
+def graphikBlock(page):
+    """The template's own part, after pygbag's default page."""
+    return page[page.index("graphik grid3d:"):]
+
+
+def test_the_template_is_package_data_with_the_relay_and_a_3d_toggle():
+    page = templatePage()
     assert page.startswith("<html")
     assert '<canvas id="relay" hidden' in page
-    for script in ("strata-loader.js", "strata-kit.js", "grid-relay.js"):
-        assert '<script src="%s"></script>' % script in page
     assert 'id="graphik3d"' in page and "window.Graphik3D" in page
     # 3D loads only when asked for, and 2D comes back when it can't
-    assert page.index("relay.request(") > page.index("function set(")
+    assert page.index("StrataGridRelay.request(") > page.index("function start(")
     assert 'state.indexOf("failed:") === 0' in page and "show2d(true)" in page
     # pygbag's own canvas is still there, and its python block intact
     assert 'id="canvas"' in page and "asyncio.run( custom_site() )" in page
+
+
+def test_the_relays_scripts_are_fetched_only_when_3d_is_wanted():
+    page = templatePage()
+    block = graphikBlock(page)
+    # no script tag fetches them with the page (a page starting in 2D
+    # fetches nothing of the 3D view)
+    for script in ("strata-loader.js", "strata-kit.js", "grid-relay.js"):
+        assert '<script src="%s"' % script not in page
+        assert "src='%s'" % script not in page
+    # they are injected, in order, by set() turning 3D on
+    assert '["strata-loader.js", "strata-kit.js", "grid-relay.js"]' in block
+    assert 'document.createElement("script")' in block
+    assert block.index("loadScripts(0)") > block.index("function set(")
+    assert "tag.onload = function () { loadScripts(index + 1); }" in block
+    # a missing file brings the 2D view back with a plain reason
+    assert "tag.onerror" in block and "could not be downloaded" in block
+    # the game is told 3D is wanted only once the scripts are in
+    assert 'wanted: function () { return on && scripts === "ready" ? 1 : 0; }' in block
+
+
+def test_the_page_starts_in_3d_unless_asked_otherwise():
+    block = graphikBlock(templatePage())
+    assert 'data-default-view="3d"' in block
+    assert 'if (startingView() === "3d") {' in block
+    # the address first, then the player's choice, then the game's default
+    view = block[block.index("function startingView()"):]
+    assert view.index('get("view")') < view.index("remembered()") < view.index(
+        'getAttribute("data-default-view")'
+    )
+    # the choice on the button is remembered; storage that throws is fine
+    assert 'remember(on ? "3d" : "2d")' in block
+    assert block.count("try {") >= 3 and "localStorage" in block
+
+
+def test_2d_shows_until_3d_draws_the_game_and_comes_back_with_a_reason():
+    block = graphikBlock(templatePage())
+    # the 2D canvas hides only once the game has sent the 3D view something
+    assert "fed = true" in block
+    assert 'const drawing = state === "ready" && fed;' in block
+    assert "if (drawing) show2d(false);" in block
+    # failures say why, in words, on the page
+    assert 'id="graphik3d-note"' in block and 'role="status"' in block
+    assert "No 3D view here: " in block and "The 2D view stays." in block
+    assert 'indexOf("failed:") === 0) fail(' in block
+    assert "this browser can't draw WebGL 2" in block and ".sk-loader { display: none !important; }" in block
+
+
+def test_a_game_can_choose_2d_as_its_default_view():
+    assert web.templatePath() == web.TEMPLATE == web.templatePath("3d")
+    path = web.templatePath(defaultView="2d")
+    assert path != web.TEMPLATE
+    with open(path, encoding="utf-8") as handle:
+        page = handle.read()
+    assert 'data-default-view="2d"' in page and 'data-default-view="3d"' not in page
+    # otherwise the same page
+    assert page.replace('"2d"', '"3d"') == templatePage().replace('"2d"', '"3d"')
+    with pytest.raises(ValueError):
+        web.templatePath("4d")
+
+
+def test_the_page_never_scrolls_so_the_button_stays_on_screen():
+    block = graphikBlock(templatePage())
+    assert "html, body { overflow: hidden; }" in block
+    # the relay's canvas fills the viewport, not 100vw (wider than it with
+    # a scrollbar)
+    assert "width:100vw" not in block and "width:100%;height:100%" in block
+
+
+def test_the_template_has_one_viewport_tag_with_device_width():
+    page = templatePage()
+    tags = [line.strip() for line in page.splitlines() if 'name="viewport"' in line]
+    assert len(tags) == 1, tags
+    assert "width=device-width" in tags[0] and "initial-scale=1.0" in tags[0]
+
+
+def test_the_button_says_where_it_is():
+    block = graphikBlock(templatePage())
+    assert "area: function ()" in block and "getBoundingClientRect()" in block
+
+
+def test_the_template_has_no_jinja_delimiters_in_graphiks_part():
+    # pygbag renders the template: {{ }}, {% %} or {# #} in the JS would break it
+    block = graphikBlock(templatePage())
+    for delimiter in ("{{", "{%", "{#"):
+        assert delimiter not in block

@@ -11,7 +11,7 @@ This library assists developers with graphics programming.
 graphik is released as git tags, not on PyPI. Install a release from its tag's
 archive (no `git` needed):
 ```bash
-pip install "graphik @ https://github.com/Stephenson-Software/graphik/archive/refs/tags/v0.5.0.zip"
+pip install "graphik @ https://github.com/Stephenson-Software/graphik/archive/refs/tags/v0.5.1.zip"
 ```
 In a `requirements.txt`, use the same line without the quotes. See
 [RELEASING.md](RELEASING.md) for how releases are cut.
@@ -95,7 +95,7 @@ and runs on Linux and Windows desktops, and in the browser under pygbag
 (see [In the browser](#in-the-browser)):
 
 ```bash
-pip install "graphik[strata] @ https://github.com/Stephenson-Software/graphik/archive/refs/tags/v0.5.0.zip"
+pip install "graphik[strata] @ https://github.com/Stephenson-Software/graphik/archive/refs/tags/v0.5.1.zip"
 ```
 
 ```python
@@ -140,7 +140,9 @@ Under [pygbag](https://pypi.org/project/pygbag/) (`sys.platform == "emscripten"`
 
 - `view.ready` turns true once the page has loaded the 3D view; `view.failure()` says why it couldn't. `open()` raises `Unavailable` on a page without the relay.
 - `view.pollEvents()` returns Strata-style events (keys with desktop Strata's scancodes, mouse, wheel, resize, and `FINGER_*` for touch), and `grid3d.web.toPygameEvents(events, pygame)` turns them into pygame events, so a game's 2D input code runs unchanged. It converts desktop Strata events too.
-- The page: build with `pygbag --template <grid3d.web.templatePath()> ...`, a copy of pygbag 0.9.3's default template with the relay's canvas and scripts and a **3D** button. The relay has to be served with the game (a browser can't fetch GitHub release assets cross-origin): `python -m preponderous.graphik.grid3d.relay --strata 0.9.0 --dest <pygbag output>` downloads Strata's `strata-<version>-wasm32-emscripten.tar.gz`, checks it against the release's `SHA256SUMS` and copies its prebuilt `kit/grid-relay/dist/` next to the page, leaving files already there (pygbag's `index.html`) alone. Nothing of the 3D view is downloaded until the player presses the button; the 2D canvas stays on screen while it loads and whenever it can't (too big, no WebGL 2), and the button then says so. `grid3d.web.wants3D()` tells the game the button is on, and `set3D(False, reason)` turns it off.
+- The page: build with `pygbag --template <grid3d.web.templatePath()> ...`, a copy of pygbag 0.9.3's default template with the relay's canvas and a **2D/3D** button. The relay has to be served with the game (a browser can't fetch GitHub release assets cross-origin): `python -m preponderous.graphik.grid3d.relay --strata 0.9.0 --dest <pygbag output>` downloads Strata's `strata-<version>-wasm32-emscripten.tar.gz`, checks it against the release's `SHA256SUMS` and copies its prebuilt `kit/grid-relay/dist/` next to the page, leaving files already there (pygbag's `index.html`) alone.
+- Since 0.5.1 the page starts in **3D**, as a desktop `Grid3DView` game does: the relay's scripts and engine load at once, alongside pygbag, and the 2D canvas stays on screen until the 3D view is drawing the game. If 3D can't start (no WebGL 2, a file missing, too big, the engine failed), the 2D view stays, the button reads *3D unavailable* and a note under it says why in plain words. Which view a page starts in: `?view=2d` or `?view=3d` in the address (for testing and sharing; not remembered), else the player's last choice on the button (kept in `localStorage`; a stored 2D wins over the default), else the game's default, which `templatePath(defaultView="2d")` makes 2D. A page that starts in 2D downloads nothing of the 3D view (not even the relay's three small scripts) until the button is pressed. `grid3d.web.wants3D()` tells the game 3D is on and the relay's scripts are in, so `Grid3DWebView.open()` can begin, and `set3D(False, reason)` turns it off.
+- The button sits in the page's top right corner. `grid3d.web.buttonArea()` gives its `(x, y, width, height)` in CSS pixels, the units of the web view's labels and panels, so a HUD can keep text out from under it (`None` outside a browser). The page never scrolls (`overflow: hidden`), so a phone's browser can't widen it to fit pygbag's 50000-pixel measuring element and push the button off screen, and its one viewport tag sets `width=device-width` (pygbag 0.9.3's default page has a second one that overrides it). Strata's own loading and failure overlay is hidden, so it never covers the 2D game.
 
 In a game's `browser.yml`, where graphik is installed into `src/` for pygbag:
 
