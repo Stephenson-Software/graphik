@@ -181,8 +181,7 @@ function show_infobox() {
     <title>{{cookiecutter.title}}</title>
     <meta charset="UTF-8">
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="viewport" content="height=device-height, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, height=device-height, initial-scale=1.0">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes"/>
 
@@ -430,32 +429,86 @@ frameborder="1"
     </script>
 
 
-<!-- The page above is pygbag 0.9.3's default template (MIT licensed).
+<!-- The page above is pygbag 0.9.3's default template (MIT licensed), with
+<!-- The page above is pygbag 0.9.3's default template (MIT licensed), with
+     one change: its two viewport tags are one (a page's second viewport tag
+     replaces the first, which left phones without width=device-width).
      graphik grid3d: the Strata grid relay over pygame's canvas, fed by
-     preponderous.graphik.grid3d.web, and a toggle between the 2D and 3D views.
-     Nothing of the 3D view is downloaded until the toggle is pressed; while it
-     loads, and whenever it can't (too big, no WebGL 2, the engine failed), the
-     2D canvas stays on screen. The relay's files (grid-relay-scene.js and
-     .wasm, strata-loader.js, strata-kit.js, grid-relay.js) go next to this
-     page: `python -m preponderous.graphik.grid3d.relay` copies them from
-     Strata's release at build time. -->
-<canvas id="relay" hidden tabindex="0" style="position:fixed;inset:0;width:100vw;height:100vh;z-index:6;touch-action:none"></canvas>
-<button id="graphik3d" type="button" aria-pressed="false" title="Show the board in 3D"
+     preponderous.graphik.grid3d.web, and a button switching between the 2D
+     and 3D views.
+     Which view a page starts in: ?view=2d or ?view=3d in its address (for
+     testing and sharing; not remembered), else the player's last choice on
+     the button (kept in localStorage), else the game's default, the
+     button's data-default-view (3d unless the game built with
+     templatePath(defaultView="2d")).
+     Starting in 3D, the relay's scripts and engine load at once, alongside
+     pygbag. The 2D canvas stays on screen until the 3D view is drawing the
+     game, and comes back, with the reason in plain words, whenever 3D can't
+     start (no WebGL 2, a file missing, too big, the engine failed). A page
+     starting in 2D fetches nothing of the 3D view until the button is
+     pressed. The relay's files (grid-relay-scene.js and .wasm,
+     strata-loader.js, strata-kit.js, grid-relay.js) go next to this page:
+     `python -m preponderous.graphik.grid3d.relay` copies them from Strata's
+     release at build time. -->
+<style>
+  /* The page never scrolls. pygbag measures text with a 50000-pixel-wide
+     element; without this a phone's browser widens the page to fit it once
+     the 3D canvas shows, which pushes the 2D/3D button off screen. */
+  html, body { overflow: hidden; }
+  /* Strata's loader would cover the page while the 3D view loads and when
+     it fails; here the 2D view stays on screen instead, and the note below
+     the button says why 3D couldn't start. */
+  .sk-loader { display: none !important; }
+  #graphik3d-note {
+    position: fixed; top: 52px; right: 8px; z-index: 10; max-width: calc(100vw - 16px);
+    box-sizing: border-box; padding: 8px 12px; border-radius: 6px; background: #222; color: #eee;
+    font: 14px sans-serif; opacity: 0.92;
+  }
+</style>
+<canvas id="relay" hidden tabindex="0" style="position:fixed;inset:0;width:100%;height:100%;z-index:6;touch-action:none;visibility:hidden"></canvas>
+<button id="graphik3d" type="button" aria-pressed="false" title="Show the board in 3D" data-default-view="3d"
     style="position:fixed;top:8px;right:8px;z-index:10;font:bold 14px sans-serif;padding:6px 12px;min-width:44px;min-height:36px;border-radius:6px;border:1px solid #444;background:#222;color:#eee;opacity:0.85">3D</button>
-<script src="strata-loader.js"></script>
-<script src="strata-kit.js"></script>
-<script src="grid-relay.js"></script>
+<div id="graphik3d-note" role="status" aria-live="polite" hidden></div>
 <script>
 (function () {
   "use strict";
-  // window.Graphik3D: the page's 3D toggle, read by grid3d.web.wants3D() and
-  // set by grid3d.web.set3D(). Strings and numbers only (pygbag's bridge).
+  // window.Graphik3D: the page's 2D/3D switch, read by grid3d.web.wants3D()
+  // and set by grid3d.web.set3D(); its area() by grid3d.web.buttonArea().
+  // Strings and numbers only (pygbag's bridge).
   const button = document.getElementById("graphik3d");
-  let on = 0, broken = "";
+  const note = document.getElementById("graphik3d-note");
+  // the relay's scripts, in order, fetched the first time 3D is wanted
+  const SCRIPTS = ["strata-loader.js", "strata-kit.js", "grid-relay.js"];
+  const STORE = "graphik.view";
+  let on = 0, broken = "", scripts = "idle";  // idle, loading, ready, failed
+  let fed = false;  // the game has sent the 3D view something to draw
+  let noteTimer = 0;
   function canvas2d() { return document.getElementById("canvas"); }
+  function canvas3d() { return document.getElementById("relay"); }
   function show2d(visible) {
     const c = canvas2d();
     if (c) c.style.visibility = visible ? "visible" : "hidden";
+  }
+  function show3d(visible) {
+    const c = canvas3d();
+    if (!c) return;
+    c.style.visibility = visible ? "visible" : "hidden";
+    // presses reach the 2D game until the 3D view is drawing
+    c.style.pointerEvents = visible ? "" : "none";
+  }
+  function remembered() {
+    try { return window.localStorage.getItem(STORE) || ""; } catch (e) { return ""; }
+  }
+  function remember(view) {
+    try { window.localStorage.setItem(STORE, view); } catch (e) { /* not kept: fine */ }
+  }
+  function startingView() {
+    let asked = "";
+    try { asked = (new URLSearchParams(window.location.search).get("view") || "").toLowerCase(); } catch (e) { asked = ""; }
+    if (asked === "2d" || asked === "3d") return asked;
+    const kept = remembered();
+    if (kept === "2d" || kept === "3d") return kept;
+    return button.getAttribute("data-default-view") === "2d" ? "2d" : "3d";
   }
   function label() {
     button.setAttribute("aria-pressed", on ? "true" : "false");
@@ -467,44 +520,130 @@ frameborder="1"
       button.title = on ? "Back to the 2D view" : "Show the board in 3D";
     }
   }
+  // Strata's failure codes, in words a player can act on
+  const REASONS = {
+    "no-webgl2": "this browser can't draw WebGL 2",
+    "network": "the 3D engine could not be downloaded",
+    "load": "the 3D engine could not be loaded",
+    "engine": "the 3D engine failed to start",
+    "context-lost": "the 3D view lost its graphics context",
+    "slow": "this device draws the 3D view too slowly",
+  };
+  function plain(reason) {
+    reason = String(reason || "").trim();
+    return REASONS[reason] || reason || "it could not start";
+  }
+  // The note stays until the player has been playing a while (a failure
+  // can come while pygbag still waits for its first tap): it goes 10
+  // seconds after the next press or key, or at once when tapped.
+  function tell(text) {
+    note.textContent = text;
+    note.hidden = false;
+    clearTimeout(noteTimer);
+    const later = function () {
+      window.removeEventListener("pointerdown", later, true);
+      window.removeEventListener("keydown", later, true);
+      noteTimer = setTimeout(function () { note.hidden = true; }, 10000);
+    };
+    window.addEventListener("pointerdown", later, true);
+    window.addEventListener("keydown", later, true);
+  }
+  note.addEventListener("click", function () { note.hidden = true; });
+  function fail(reason) {
+    set(0, plain(reason));
+    tell("No 3D view here: " + broken + ". The 2D view stays.");
+  }
+  function loadScripts(index) {
+    if (index === SCRIPTS.length) {
+      const relay = window.StrataGridRelay;
+      if (!relay) { scripts = "failed"; fail("the 3D view's files did not load"); return; }
+      // the 3D view shows once the game has sent it something to draw
+      const send = relay.send.bind(relay);
+      relay.send = function (message) { fed = true; return send(message); };
+      scripts = "ready";
+      if (on) start();
+      return;
+    }
+    const tag = document.createElement("script");
+    tag.src = SCRIPTS[index];
+    tag.async = false;
+    tag.onload = function () { loadScripts(index + 1); };
+    tag.onerror = function () {
+      scripts = "failed";
+      fail("the 3D view's files could not be downloaded");
+    };
+    document.body.appendChild(tag);
+  }
+  function start() {
+    // the engine starts loading at once; the game's Grid3DWebView.open()
+    // finds it already loading
+    window.StrataGridRelay.request(JSON.stringify({canvas: "relay", title: document.title || "the 3D view"}));
+  }
   function set(value, reason) {
     on = value ? 1 : 0;
     if (reason) broken = String(reason);
-    const relay = window.StrataGridRelay;
+    const relay = scripts === "ready" ? window.StrataGridRelay : null;
+    if (on && !window.WebGL2RenderingContext) {
+      on = 0;
+      broken = broken || REASONS["no-webgl2"];
+    }
     if (on && relay) {
-      // started on the click itself, so loading begins at once; the game's
-      // Grid3DWebView.open() finds it already loading
-      relay.request(JSON.stringify({canvas: "relay", title: document.title || "the 3D view"}));
-    } else if (!on) {
+      start();
+    } else if (on && scripts === "idle") {
+      scripts = "loading";
+      loadScripts(0);
+    } else if (on && scripts === "failed") {
+      on = 0;
+    }
+    if (!on) {
       if (relay && relay.state() !== "idle") relay.close();
+      fed = false;
+      show3d(false);
       show2d(true);
     }
     label();
   }
-  // The 2D canvas hides only once the 3D view is drawing, and comes back
-  // if it fails, so there is always a view on screen.
+  // The 2D canvas hides only once the 3D view is drawing the game, and
+  // comes back if 3D fails, so there is always a view on screen.
   setInterval(function () {
-    const relay = window.StrataGridRelay;
+    const relay = scripts === "ready" ? window.StrataGridRelay : null;
     if (!on || !relay) return;
     const state = relay.state();
-    // clicks reach the 2D game until the 3D view is drawing
-    const c3 = document.getElementById("relay");
-    if (c3) c3.style.pointerEvents = state === "ready" ? "" : "none";
-    if (state === "ready") show2d(false);
-    else if (state.indexOf("failed:") === 0) set(0, state.slice(7));
+    const drawing = state === "ready" && fed;
+    show3d(drawing);
+    if (drawing) show2d(false);
+    else if (state.indexOf("failed:") === 0) fail(state.slice(7));
   }, 150);
   button.addEventListener("click", function () {
-    if (!broken) set(on ? 0 : 1);
-    const c = on ? document.getElementById("relay") : canvas2d();
+    if (!broken) {
+      set(on ? 0 : 1);
+      if (!broken) remember(on ? "3d" : "2d");
+    }
+    if (broken) tell("No 3D view here: " + broken + ". The 2D view stays.");
+    const c = on ? canvas3d() : canvas2d();
     if (c && c.focus) c.focus();
   });
   window.Graphik3D = {
-    wanted: function () { return on; },
+    // on, and the relay's scripts are in (so Grid3DWebView.open() can begin)
+    wanted: function () { return on && scripts === "ready" ? 1 : 0; },
     set: function (value, reason) { set(Number(value), reason || ""); return on; },
     toggle: function () { return this.set(on ? 0 : 1); },
     unavailable: function () { return broken; },
+    // the view the page started in: "2d" or "3d"
+    starting: startingView,
+    // where the button is, in CSS pixels from the viewport's top left
+    // ("x,y,width,height"), for a game to keep its HUD out of; "" if hidden
+    area: function () {
+      const r = button.getBoundingClientRect();
+      if (!r.width || !r.height) return "";
+      return [r.left, r.top, r.width, r.height].map(function (v) { return Math.round(v); }).join(",");
+    },
   };
   label();
+  if (startingView() === "3d") {
+    if (window.WebGL2RenderingContext) set(1);
+    else fail("no-webgl2");
+  }
 })();
 </script>
 </body>
