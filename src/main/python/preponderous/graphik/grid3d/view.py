@@ -8,6 +8,10 @@ x64 libraries, so this view runs there; anywhere else, or when the library
 can't load or no window can open, Grid3DView.open() raises Unavailable with a
 reason a player can act on, and the game keeps its 2D view.
 
+In a browser (pygbag, where sys.platform is "emscripten"), Grid3DView.open()
+returns a Grid3DWebView instead (web.py): the same calls, drawn by the
+page's Strata grid relay. See web.py for what the page needs.
+
 Usage, once per game:
 
     view = Grid3DView.open(900, 700, "My game")       # or headless=True
@@ -16,6 +20,8 @@ Usage, once per game:
     view.setLabels(labels, panels)                    # when the HUD changes
     view.frame()                                      # once per display frame
     view.close()
+
+    view.pickCell(x, y)        # the (column, row) under a pointer, or None
 
 The board and labels are kept between frames; pieces slide between their
 cells over one tick (see animate.Animator).
@@ -26,6 +32,7 @@ import sys
 import time
 
 from .animate import Animator
+from .pick import cellScreenPosition, pickCell, projectToScreen
 
 STRATA_VERSION = "0.8.0"
 STRATA_PLATFORMS = ("linux", "win32")
@@ -58,7 +65,33 @@ def loadStrata(platform=None):
         raise Unavailable("the Strata library couldn't be loaded: %s" % error)
 
 
-class Grid3DView:
+class ViewGeometry:
+    """Where things are on screen, for a view with `board`, `width` and
+    `height` (Grid3DView and Grid3DWebView)."""
+
+    def camera(self):
+        """The camera the current board is drawn with at this window size."""
+        if self.board is None:
+            raise RuntimeError("setBoard() must come before the camera")
+        return self.board.camera(self.width / float(self.height))
+
+    def pickCell(self, x, y):
+        """The board (column, row) under window pixel (x, y), or None."""
+        if self.board is None:
+            return None
+        return pickCell(self.camera(), self.board, x, y, self.width, self.height)
+
+    def projectToScreen(self, point):
+        """Where world point (x, y, z) lands in the window, or None."""
+        return projectToScreen(self.camera(), point, self.width, self.height)
+
+    def cellScreenPosition(self, column, row, y=0.0):
+        """Where the middle of a cell, `y` above the bed, lands in the window."""
+        return cellScreenPosition(self.camera(), self.board, column, row,
+                                  self.width, self.height, y)
+
+
+class Grid3DView(ViewGeometry):
     """One Strata engine (a window, or headless for screenshots and tests)."""
 
     def __init__(self, strata, lib, engine, width, height, isWindow,
@@ -83,7 +116,15 @@ class Grid3DView:
     def open(cls, width=900, height=700, title="graphik", headless=False,
              reducedMotion=False, clock=time.monotonic):
         """Open a window (or a headless surface); raise Unavailable if Strata
-        can't run here."""
+        can't run here. In a browser this is a Grid3DWebView (web.py), which
+        has no headless form."""
+        if sys.platform == "emscripten":
+            if headless:
+                raise Unavailable("a browser has no headless 3D view")
+            from .web import Grid3DWebView
+
+            return Grid3DWebView.open(width, height, title,
+                                      reducedMotion=reducedMotion or None, clock=clock)
         if headless and sys.platform.startswith("linux"):
             # Linux renders headless through EGL with no window. On Windows the
             # headless engine is a hidden SDL window, which the dummy driver

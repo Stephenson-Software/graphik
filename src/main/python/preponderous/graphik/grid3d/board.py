@@ -4,8 +4,15 @@ A game says *what* is on each cell with Piece objects; a Theme says *how*
 everything looks (tile colours, frame, one PieceStyle per kind of piece).
 GridBoard turns the two into scene shapes and lights, and fits a camera.
 Pure Python: no Strata, no pygame.
+
+Options for bigger or busier boards: `tiles` gives cells their own colour
+(and a raise above the bed), `mergeTiles` draws a row's neighbouring tiles
+of one look as one box (a 64 x 64 board of grass is 64 boxes, not 4096),
+and `viewport` draws only a window of the board (a close-up around one
+cell). `scene(highlight=...)` lights the tile under the pointer.
 """
 
+import math
 from dataclasses import dataclass, field
 from typing import Callable, Dict, Hashable, List, Optional, Tuple
 
@@ -32,10 +39,17 @@ class PieceStyle:
     piece's main shape, standing on the board with its base `lift` above the
     tiles. `glow` adds a point light above it: (radius, intensity). `tones`
     (odd, even) shades chained pieces alternately by link, so a long body
-    reads as segments. `extras`
-    draws decorations (eyes, a crown): called with (piece, x, z, baseY), it
-    returns more Shapes, positioned from the piece's current (possibly
-    interpolated) world position.
+    reads as segments.
+
+    `extras` draws decorations (eyes, a crown): called with
+    (piece, x, z, baseY), it returns more Shapes. Their positions are
+    relative to the piece: x and z measured from the given (x, z), which is
+    the piece's current (possibly interpolated) world position, and y from
+    `baseY` (or absolute). Moving (x, z) by some amount must move every shape
+    it returns by the same amount, and nothing else about them may depend on
+    where the piece stands. The browser backend (web.py) relies on this: it
+    draws a piece's shapes once, sends them as offsets from the piece, and
+    the page slides them along with it.
     """
 
     kind: int = CUBE
@@ -93,6 +107,9 @@ class Theme:
     bridgeAcross: float = 0.6
     bridgeHeight: float = 0.8
     bridgeShade: float = 0.85
+    # The slab GridBoard.scene(highlight=cell) lays on the tile under the
+    # pointer (the 3D form of a 2D button's hover lift).
+    highlight: Tuple[float, float, float] = (1.0, 0.86, 0.35)
 
     def style(self, name):
         try:
@@ -102,6 +119,37 @@ class Theme:
                 "no PieceStyle named %r in the theme (known: %s)"
                 % (name, ", ".join(sorted(self.pieces)) or "none")
             )
+
+
+@dataclass(frozen=True)
+class Tile:
+    """One cell's own tile (GridBoard's `tiles`): a 0-1 (r, g, b) colour, and
+    how far its top stands above the bed (water and grass a little proud of
+    bare soil). Its bottom stays where every tile's is."""
+
+    color: Tuple[float, float, float]
+    raised: float = 0.0
+
+
+@dataclass(frozen=True)
+class Viewport:
+    """A window of a board: `columns` x `rows` cells from (column, row), its
+    top-left cell. It may reach past the board's edges; cells off the board
+    are left empty."""
+
+    column: int
+    row: int
+    columns: int
+    rows: int
+
+    def contains(self, column, row):
+        return (self.column <= column < self.column + self.columns
+                and self.row <= row < self.row + self.rows)
+
+    @classmethod
+    def around(cls, column, row, reach):
+        """The (2 * reach + 1)-cell square centred on (column, row)."""
+        return cls(column - reach, row - reach, 2 * reach + 1, 2 * reach + 1)
 
 
 def cellCenter(column, row, columns, rows):
@@ -125,65 +173,165 @@ def fitCamera(columns, rows, aspect=1.0, fovDegrees=42.0):
 
 
 class GridBoard:
-    """A columns x rows board drawn with a Theme."""
+    """A columns x rows board drawn with a Theme.
 
-    def __init__(self, columns, rows, theme=None):
+    `tiles` maps (column, row) to a Tile (or a 0-1 colour) for cells whose
+    tile isn't the theme's checker; the others keep it. `mergeTiles` draws
+    each run of neighbouring tiles in a row that look the same (colour and
+    raise, after any tint) as one stretched box, so a big board costs a
+    shape per run, not per cell. `viewport` (a Viewport) draws only that
+    window of the board: the window is centred on the origin, framed and
+    fitted by the camera as if it were the whole board, pieces outside it
+    aren't drawn, and cells past the board's edge stay empty. Pieces and
+    picking still use the whole board's (column, row).
+    """
+
+    def __init__(self, columns, rows, theme=None, tiles=None, mergeTiles=False,
+                 viewport=None):
         if columns < 1 or rows < 1:
             raise ValueError("a board needs at least one column and one row")
+        if viewport is not None and (viewport.columns < 1 or viewport.rows < 1):
+            raise ValueError("a viewport needs at least one column and one row")
         self.columns = columns
         self.rows = rows
         self.theme = theme or Theme()
+        self.tiles = tiles
+        self.mergeTiles = mergeTiles
+        self.viewport = viewport
+
+    # -- what is on show
+
+    def shownSize(self):
+        """(columns, rows) of what is drawn: the viewport's, or the board's."""
+        if self.viewport is None:
+            return self.columns, self.rows
+        return self.viewport.columns, self.viewport.rows
+
+    def shownOrigin(self):
+        """The board cell drawn at the top-left of what is on show."""
+        if self.viewport is None:
+            return 0, 0
+        return self.viewport.column, self.viewport.row
+
+    def visible(self, column, row):
+        """True for a board cell that is drawn (on the board and in view)."""
+        return self.contains(column, row) and (
+            self.viewport is None or self.viewport.contains(column, row)
+        )
 
     def cellCenter(self, column, row):
-        return cellCenter(column, row, self.columns, self.rows)
+        if self.viewport is None:
+            return cellCenter(column, row, self.columns, self.rows)
+        v = self.viewport
+        return cellCenter(column - v.column, row - v.row, v.columns, v.rows)
 
     def contains(self, column, row):
         return 0 <= column < self.columns and 0 <= row < self.rows
 
     def camera(self, aspect=1.0):
-        return fitCamera(self.columns, self.rows, aspect)
+        columns, rows = self.shownSize()
+        return fitCamera(columns, rows, aspect)
+
+    def cellAt(self, x, z):
+        """The visible board cell under world point (x, z), or None."""
+        columns, rows = self.shownSize()
+        originColumn, originRow = self.shownOrigin()
+        column = int(math.floor(x + columns / 2.0)) + originColumn
+        row = int(math.floor(z + rows / 2.0)) + originRow
+        return (column, row) if self.visible(column, row) else None
 
     # -- the static part
 
+    def tileAt(self, column, row):
+        """The Tile drawn on a visible cell (before any tint)."""
+        t = self.theme
+        own = None if self.tiles is None else self.tiles.get((column, row))
+        if own is not None:
+            return own if isinstance(own, Tile) else Tile(tuple(own))
+        if t.alternate is not None and (column + row) % 2:
+            return Tile(t.alternate)
+        return Tile(t.tile)
+
+    def tileRaise(self, column, row):
+        """How far the tile on a visible cell stands above the bed."""
+        own = None if self.tiles is None else self.tiles.get((column, row))
+        return own.raised if isinstance(own, Tile) else 0.0
+
     def boardShapes(self, tint=None, tintAmount=0.55):
-        """Tiles (checkered when the theme has an alternate colour) and a
-        frame. `tint` blends every tile towards a colour (a red flash on a
-        collision)."""
+        """Tiles (checkered when the theme has an alternate colour, or the
+        board's own `tiles`) and a frame. `tint` blends every tile towards a
+        colour (a red flash on a collision)."""
         t = self.theme
         shapes = []
         edge = 1.0 - t.tileGap
-        for row in range(self.rows):
-            for column in range(self.columns):
-                cx, cz = self.cellCenter(column, row)
-                color = t.tile
-                if t.alternate is not None and (column + row) % 2:
-                    color = t.alternate
+        columns, rows = self.shownSize()
+        originColumn, originRow = self.shownOrigin()
+        for shownRow in range(rows):
+            row = originRow + shownRow
+            run = None  # [first column, last column, color, raised]
+            for shownColumn in range(columns):
+                column = originColumn + shownColumn
+                if not self.contains(column, row):
+                    if run is not None:
+                        shapes.append(self._tileShape(run, row, edge))
+                        run = None
+                    continue
+                tile = self.tileAt(column, row)
+                color = tile.color
                 if tint is not None:
                     color = tuple(
                         (1 - tintAmount) * c + tintAmount * k
                         for c, k in zip(color, tint)
                     )
-                shapes.append(
-                    Shape(
-                        CUBE,
-                        (cx, BED_TOP - t.tileHeight / 2, cz),
-                        (edge, t.tileHeight, edge),
-                        rgba(color),
-                    )
-                )
+                if (self.mergeTiles and run is not None
+                        and run[2] == color and run[3] == tile.raised):
+                    run[1] = column
+                    continue
+                if run is not None:
+                    shapes.append(self._tileShape(run, row, edge))
+                run = [column, column, color, tile.raised]
+            if run is not None:
+                shapes.append(self._tileShape(run, row, edge))
         if t.frame is not None:
-            halfW, halfD = self.columns / 2.0, self.rows / 2.0
+            halfW, halfD = columns / 2.0, rows / 2.0
             rim, height = t.frameWidth, t.tileHeight + 0.12
             yMid = BED_TOP - t.tileHeight + height / 2
             frame = rgba(t.frame)
-            wide = self.columns + 2 * rim
+            wide = columns + 2 * rim
             shapes += [
                 Shape(CUBE, (0.0, yMid, -halfD - rim / 2), (wide, height, rim), frame),
                 Shape(CUBE, (0.0, yMid, halfD + rim / 2), (wide, height, rim), frame),
-                Shape(CUBE, (-halfW - rim / 2, yMid, 0.0), (rim, height, self.rows), frame),
-                Shape(CUBE, (halfW + rim / 2, yMid, 0.0), (rim, height, self.rows), frame),
+                Shape(CUBE, (-halfW - rim / 2, yMid, 0.0), (rim, height, rows), frame),
+                Shape(CUBE, (halfW + rim / 2, yMid, 0.0), (rim, height, rows), frame),
             ]
         return shapes
+
+    def _tileShape(self, run, row, edge):
+        first, last, color, raised = run
+        t = self.theme
+        firstX, z = self.cellCenter(first, row)
+        if first == last:
+            x, width = firstX, edge
+        else:
+            lastX, _ = self.cellCenter(last, row)
+            x, width = (firstX + lastX) / 2.0, last - first + 1 - t.tileGap
+        if raised:
+            height = t.tileHeight + raised
+            y = BED_TOP - t.tileHeight + height / 2
+        else:
+            height, y = t.tileHeight, BED_TOP - t.tileHeight / 2
+        return Shape(CUBE, (x, y, z), (width, height, edge), rgba(color))
+
+    def highlightShapes(self, cell, color=None):
+        """A thin slab on a visible cell's tile, in the theme's highlight
+        colour (or `color`): the tile under the pointer. None for no cell."""
+        if cell is None or not self.visible(*cell):
+            return []
+        x, z = self.cellCenter(*cell)
+        edge = 1.0 - self.theme.tileGap
+        top = BED_TOP + self.tileRaise(*cell)
+        color = self.theme.highlight if color is None else color
+        return [Shape(CUBE, (x, top + 0.005, z), (edge, 0.01, edge), rgba(color))]
 
     # -- the dynamic part
 
@@ -205,7 +353,10 @@ class GridBoard:
     def pieceShapes(self, pieces, positions=None):
         """Shapes and lights for `pieces`. `positions` maps a piece id to its
         world (x, z) for this frame (from an Animator); pieces without one
-        stand in the middle of their cell."""
+        stand in the middle of their cell. With a viewport, pieces outside
+        it are left out."""
+        if self.viewport is not None:
+            pieces = [p for p in pieces if self.viewport.contains(p.column, p.row)]
         shapes, lights = [], []
         where = {}
         for piece in pieces:
@@ -235,48 +386,66 @@ class GridBoard:
                 )
             if style.extras is not None:
                 shapes.extend(style.extras(piece, x, z, baseY) or [])
-        shapes.extend(self._bridges(pieces, where))
+        for a, b in self.bridgePairs(pieces):
+            shapes.append(self.bridgeShape(a, b, where[a.id], where[b.id]))
         return shapes, lights
 
-    def _bridges(self, pieces, where):
-        t = self.theme
+    def bridgePairs(self, pieces):
+        """(a, b) for every pair of pieces joined by a bridge: the same chain,
+        consecutive links (a's link + 1 == b's) and orthogonal neighbours on
+        their cells. Chains come in the order their first piece does, each
+        pair in link order: the order pieceShapes draws the bridges in."""
         chains = {}
         for piece in pieces:
             if piece.chain is not None:
                 chains.setdefault(piece.chain, []).append(piece)
-        shapes = []
+        pairs = []
         for members in chains.values():
-            members.sort(key=lambda p: p.link)
+            members = sorted(members, key=lambda p: p.link)
             for a, b in zip(members, members[1:]):
                 if b.link != a.link + 1:
                     continue
                 # only orthogonal neighbours (on their target cells) are joined
                 if abs(a.column - b.column) + abs(a.row - b.row) != 1:
                     continue
-                (ax, az), (bx, bz) = where[a.id], where[b.id]
-                style = t.style(b.style)
-                scale = (a.scale + b.scale) / 2
-                across = t.bridgeAcross * scale
-                height = style.height * t.bridgeHeight * (0.75 + 0.25 * scale)
-                color = b.color if b.color is not None else style.color
-                shapes.append(
-                    Shape(
-                        SPHERE,
-                        ((ax + bx) / 2, BED_TOP + style.lift + height / 2, (az + bz) / 2),
-                        (max(across, abs(ax - bx)), height, max(across, abs(az - bz))),
-                        rgba(shade(color, t.bridgeShade)),
-                    )
-                )
-        return shapes
+                pairs.append((a, b))
+        return pairs
+
+    def bridgeShape(self, a, b, aAt, bAt):
+        """The bridge between joined pieces a and b drawn at world (x, z)
+        `aAt` and `bAt`: in the middle, stretched to reach both (and never
+        thinner across than the theme's bridgeAcross)."""
+        t = self.theme
+        (ax, az), (bx, bz) = aAt, bAt
+        style = t.style(b.style)
+        scale = (a.scale + b.scale) / 2
+        across = t.bridgeAcross * scale
+        height = style.height * t.bridgeHeight * (0.75 + 0.25 * scale)
+        color = b.color if b.color is not None else style.color
+        return Shape(
+            SPHERE,
+            ((ax + bx) / 2, BED_TOP + style.lift + height / 2, (az + bz) / 2),
+            (max(across, abs(ax - bx)), height, max(across, abs(az - bz))),
+            rgba(shade(color, t.bridgeShade)),
+        )
+
+    def _bridges(self, pieces, where):
+        # kept for code written against 0.4.0; bridgePairs and bridgeShape
+        # are the public form
+        return [self.bridgeShape(a, b, where[a.id], where[b.id])
+                for a, b in self.bridgePairs(pieces)]
 
     # -- everything
 
     def scene(self, pieces=(), positions=None, labels=(), panels=(), lights=(),
-              aspect=1.0, tint=None, clearColor=None):
-        """A complete Scene, checked against the engine limits."""
+              aspect=1.0, tint=None, clearColor=None, highlight=None,
+              highlightColor=None):
+        """A complete Scene, checked against the engine limits. `highlight`
+        is a (column, row) whose tile gets the hover slab, drawn last."""
         pieceShapes, pieceLights = self.pieceShapes(pieces, positions)
         scene = Scene(camera=self.camera(aspect))
-        scene.shapes = self.boardShapes(tint) + pieceShapes
+        scene.shapes = (self.boardShapes(tint) + pieceShapes
+                        + self.highlightShapes(highlight, highlightColor))
         scene.lights = list(lights) + pieceLights
         scene.labels = list(labels)
         scene.panels = list(panels)
