@@ -310,8 +310,7 @@ class Graphik:
         # tracking press/release edges, so function() fires on every call
         # where the mouse is held inside the button with button 1 down. That
         # default is deliberate: the vendored copies in Roam/Apex/Ophidian/
-        # Patchwork/Tic-Tak-Toe were written against this repeat-fire
-        # behavior. Press-only clicks (ported from Roam's copy) are opt-in
+        # Tic-Tak-Toe were written against this repeat-fire behavior. Press-only clicks (ported from Roam's copy) are opt-in
         # through beginFrame.
         #
         # The mouse is read before painting so the box can show hover, but a
