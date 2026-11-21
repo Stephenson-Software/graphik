@@ -130,6 +130,18 @@ class RecordedRect:
 
 
 @dataclass
+class RecordedImage:
+    """A drawImage call. A 3D view has no way to show a picture yet, so it is
+    kept for a game that wants to draw something in its place."""
+
+    filePath: str
+    x: float
+    y: float
+    width: float
+    height: float
+
+
+@dataclass
 class RecordedButton:
     """A drawButton call, with the function the 2D screen gave it."""
 
@@ -169,12 +181,35 @@ class RecordedDisplay:
 
 class ScreenRecorder:
     """Stands in for Graphik: keeps, in order, what a screen draws (drawText,
-    drawRectangle, drawButton) instead of painting it. `items` is one frame's
-    worth; reset() starts the next."""
+    drawRectangle, drawButton, drawImage) instead of painting it. `items` is
+    one frame's worth; reset() starts the next.
+
+    It answers every public call Graphik has, so a screen written against
+    Graphik 0.3.0 and later runs unchanged: beginFrame and endFrame (press-only
+    clicks) do nothing here, because the 3D view hands a press to click()
+    itself, once; getVersion is graphik's; the colour constants are Graphik's."""
+
+    # Graphik's colour constants, so screens that read graphik.red still work
+    black = (0, 0, 0)
+    white = (255, 255, 255)
+    red = (200, 0, 0)
+    green = (0, 200, 0)
+    blue = (0, 0, 200)
 
     def __init__(self, width=800, height=600):
         self.gameDisplay = RecordedDisplay(width, height)
         self.items = []
+
+    def beginFrame(self):
+        """Graphik.beginFrame: nothing to snapshot, the 3D view sends clicks."""
+
+    def endFrame(self):
+        """Graphik.endFrame: nothing to do."""
+
+    def getVersion(self):
+        from .._version import __version__
+
+        return __version__
 
     def resize(self, width, height):
         self.gameDisplay.width, self.gameDisplay.height = width, height
@@ -196,6 +231,12 @@ class ScreenRecorder:
             RecordedButton(xpos, ypos, width, height, tuple(colorBox[:3]), tuple(colorText[:3]),
                            sizeText, str(text), function)
         )
+
+    def drawImage(self, filePath, xpos, ypos, width, height):
+        self.items.append(RecordedImage(str(filePath), xpos, ypos, width, height))
+
+    def images(self):
+        return [item for item in self.items if isinstance(item, RecordedImage)]
 
     def buttons(self):
         return [item for item in self.items if isinstance(item, RecordedButton)]
