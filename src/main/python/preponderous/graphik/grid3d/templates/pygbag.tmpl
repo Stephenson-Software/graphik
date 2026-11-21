@@ -430,7 +430,6 @@ frameborder="1"
 
 
 <!-- The page above is pygbag 0.9.3's default template (MIT licensed), with
-<!-- The page above is pygbag 0.9.3's default template (MIT licensed), with
      one change: its two viewport tags are one (a page's second viewport tag
      replaces the first, which left phones without width=device-width).
      graphik grid3d: the Strata grid relay over pygame's canvas, fed by
@@ -462,15 +461,25 @@ frameborder="1"
      it fails; here the 2D view stays on screen instead, and the note below
      the button says why 3D couldn't start. */
   .sk-loader { display: none !important; }
+  /* The 2D/3D button is a switch with both views on it, the one on show
+     lit: it reads as a choice, not as a status. */
+  .graphik3d-segment {
+    display: inline-flex; align-items: center; justify-content: center;
+    min-width: 30px; padding: 0 6px; border-radius: 5px; color: #999;
+  }
+  .graphik3d-segment.graphik3d-current { background: #eee; color: #111; }
   #graphik3d-note {
-    position: fixed; top: 52px; right: 8px; z-index: 10; max-width: calc(100vw - 16px);
+    position: fixed; top: 60px; right: 8px; z-index: 10; max-width: calc(100vw - 16px);
     box-sizing: border-box; padding: 8px 12px; border-radius: 6px; background: #222; color: #eee;
     font: 14px sans-serif; opacity: 0.92;
   }
 </style>
 <canvas id="relay" hidden tabindex="0" style="position:fixed;inset:0;width:100%;height:100%;z-index:6;touch-action:none;visibility:hidden"></canvas>
-<button id="graphik3d" type="button" aria-pressed="false" title="Show the board in 3D" data-default-view="3d"
-    style="position:fixed;top:8px;right:8px;z-index:10;font:bold 14px sans-serif;padding:6px 12px;min-width:44px;min-height:36px;border-radius:6px;border:1px solid #444;background:#222;color:#eee;opacity:0.85">3D</button>
+<button id="graphik3d" type="button" aria-pressed="false" aria-label="3D view" title="Showing the 2D view: press for 3D"
+    data-default-view="3d" data-view="2d"
+    style="position:fixed;top:8px;right:8px;z-index:10;display:inline-flex;align-items:stretch;gap:2px;box-sizing:border-box;font:bold 14px sans-serif;padding:3px;min-width:44px;min-height:44px;border-radius:8px;border:1px solid #444;background:#222;color:#eee;opacity:0.9;cursor:pointer"><span
+    id="graphik3d-2d" class="graphik3d-segment" aria-hidden="true">2D</span><span
+    id="graphik3d-3d" class="graphik3d-segment" aria-hidden="true">3D</span></button>
 <div id="graphik3d-note" role="status" aria-live="polite" hidden></div>
 <script>
 (function () {
@@ -514,15 +523,25 @@ frameborder="1"
     if (kept === "2d" || kept === "3d") return kept;
     return button.getAttribute("data-default-view") === "2d" ? "2d" : "3d";
   }
+  // The button shows both views, the one on show lit, and says the same
+  // to a screen reader: a toggle named "3D view", pressed while 3D is on.
+  // data-view is what is on show ("2d", "3d", or "unavailable").
   function label() {
     button.setAttribute("aria-pressed", on ? "true" : "false");
     if (broken) {
       button.textContent = "3D unavailable";
+      button.setAttribute("aria-label", "3D view unavailable");
+      button.setAttribute("aria-disabled", "true");
+      button.setAttribute("data-view", "unavailable");
       button.title = "No 3D view here: " + broken + ". The 2D view stays.";
-    } else {
-      button.textContent = on ? "2D" : "3D";
-      button.title = on ? "Back to the 2D view" : "Show the board in 3D";
+      return;
     }
+    button.setAttribute("aria-label", "3D view");
+    button.setAttribute("data-view", on ? "3d" : "2d");
+    button.title = on ? "Showing the 3D view: press for 2D" : "Showing the 2D view: press for 3D";
+    const two = document.getElementById("graphik3d-2d"), three = document.getElementById("graphik3d-3d");
+    if (two) two.className = "graphik3d-segment" + (on ? "" : " graphik3d-current");
+    if (three) three.className = "graphik3d-segment" + (on ? " graphik3d-current" : "");
   }
   // Strata's failure codes, in words a player can act on
   const REASONS = {

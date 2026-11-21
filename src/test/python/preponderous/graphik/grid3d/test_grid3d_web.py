@@ -603,3 +603,18 @@ def test_the_template_has_no_jinja_delimiters_in_graphiks_part():
     block = graphikBlock(templatePage())
     for delimiter in ("{{", "{%", "{#"):
         assert delimiter not in block
+
+
+def test_the_button_is_a_switch_showing_both_views_and_a_finger_sized_target():
+    block = graphikBlock(templatePage())
+    button = block[block.index('<button id="graphik3d"'):block.index("</button>")]
+    # both views on it, so it reads as a choice and not as a status
+    assert '<span\n    id="graphik3d-2d"' in button and '<span\n    id="graphik3d-3d"' in button
+    assert ">2D</span>" in button and ">3D</span>" in button
+    # a toggle a screen reader can name: "3D view", pressed while 3D is on
+    assert 'aria-label="3D view"' in button and 'aria-pressed="false"' in button
+    assert 'aria-hidden="true"' in button
+    # at least 44 CSS pixels each way, and the note sits clear below it
+    assert "min-width:44px;min-height:44px" in button and "box-sizing:border-box" in button
+    assert "top: 60px" in block
+    assert ".graphik3d-segment.graphik3d-current" in block

@@ -338,6 +338,10 @@ the game's own pauses don't count); the
 latter is not remembered, the button brings 3D back, and `?slow=0` in the
 address turns it off.
 
+The button is a switch showing both views, *2D* and *3D*, with the one on
+show lit: a toggle named "3D view", `aria-pressed` while 3D is on, at least
+44 CSS pixels each way. `buttonArea()` measures it as drawn.
+
 ## The wire format
 
 The messages `Grid3DWebView` sends, as functions: Strata's

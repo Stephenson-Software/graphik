@@ -10,7 +10,7 @@ and a relay that finishes loading after 2D was chosen must stop drawing.
 Also here: the switch back to 2D when the 3D view stays too slow (only
 once the kit can go no lower, only after the game's first message and a
 grace period, never remembered, and not again once the player chose 3D
-after it).
+after it), and the button showing both views with the current one lit.
 """
 
 import json
@@ -191,7 +191,7 @@ def test_3d_that_stays_slow_at_the_lowest_tier_goes_back_to_2d_saying_why(tmp_pa
     assert not last["running"] and not last["wanted"]
     assert last["note"] == "Back to 2D: this device draws the 3D view too slowly. Press 3D to try it again."
     # not a failure: the button still offers 3D, and the switch is not the player's choice
-    assert last["stored"] is None
+    assert last["view"] == "2d" and last["name"] == "3D view" and last["stored"] is None
 
 
 @pytest.mark.skipif(NODE is None, reason="needs node")
@@ -271,3 +271,25 @@ def test_a_relay_whose_kit_reports_fast_frames_keeps_3d(tmp_path):
     # 2D mid-run.)
     log = run(tmp_path, DRAWING + [SLOW_PACE, {"frame": dict(LOWEST, frameMs=16, cpuMs=300)}, {"wait": 40000}])
     assert not log[-1]["slowed"] and log[-1]["twoD"] == "hidden" and log[-1]["running"]
+
+
+# -- the button
+
+
+@pytest.mark.skipif(NODE is None, reason="needs node")
+def test_the_button_shows_both_views_with_the_one_on_show_lit(tmp_path):
+    log = run(tmp_path, ["scripts", "loaded", "tick", "send", "tick", "click", "click"])
+    # loading 3D: the page starts in 3D, so 3D is lit and the switch pressed
+    assert log[0]["lit"] == ["3d"] and log[0]["pressed"] == "true" and log[0]["view"] == "3d"
+    assert log[0]["name"] == "3D view"
+    assert log[5]["lit"] == ["2d"] and log[5]["pressed"] == "false" and log[5]["view"] == "2d"
+    assert log[6]["lit"] == ["3d"] and log[6]["pressed"] == "true"
+
+
+@pytest.mark.skipif(NODE is None, reason="needs node")
+def test_a_failed_3d_view_says_unavailable_on_the_button(tmp_path):
+    log = run(tmp_path, ["scripts", "loaded", "fail", "tick"])
+    last = log[-1]
+    assert last["text"] == "3D unavailable" and last["view"] == "unavailable"
+    assert last["name"] == "3D view unavailable" and last["pressed"] == "false"
+    assert last["twoD"] == "visible" and last["note"].startswith("No 3D view here: the 3D engine failed to start")
