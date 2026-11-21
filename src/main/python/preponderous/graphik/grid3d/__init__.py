@@ -16,6 +16,15 @@ on-screen keys for touch screens, drawn alike in 2D and 3D (touchkeys.py).
 
 The API reference, with an example for each part, is docs/grid3d.md.
 
+How it is built (docs/grid3d.md, "How the views are built"):
+
+    game -> Grid3DView / Grid3DWebView (view.py, web.py: composition roots)
+         -> ViewState, geometry, wire, events (core) -> ports/ <- adapters/
+
+The model and core never import an adapter or a view; each port has one
+file, each adapter one file. A new backend is one adapter file plus an entry
+in adapters/__init__.py.
+
 Importing this package imports neither Strata nor pygame.
 """
 

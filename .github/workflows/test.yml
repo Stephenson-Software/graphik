@@ -61,7 +61,8 @@ jobs:
     # skip there. This job installs the strata extra and draws them for real,
     # headless through EGL on Mesa's llvmpipe (no GPU, no display), and
     # GRAPHIK_REQUIRE_STRATA turns a skip into a failure. The binding fetches
-    # the pinned Strata release library (view.STRATA_VERSION) from GitHub and
+    # the pinned Strata release library (view.STRATA_VERSION, set in
+    # adapters/binding_strata_loader.py) from GitHub and
     # checks its SHA-256. The browser backend has no render here: Strata's own
     # CI draws the grid relay in Chromium against desktop stills.
     name: grid3d render (Strata, llvmpipe)
