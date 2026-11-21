@@ -1,5 +1,5 @@
 """RelayDisplay: the page's grid relay (a GridRelay) as a SceneRenderer,
-an EventSource and a Surface, plus the retained messages Grid3DWebView
+an EventSource, a Surface and a WindowChrome, plus the retained messages Grid3DWebView
 sends it (BOARD, PIECES, HUD, VIEW)."""
 
 from types import SimpleNamespace
@@ -56,6 +56,14 @@ class RelayDisplay:
     def resize(self, width, height):
         """Nothing to do: the page sizes its own canvas (the view sends the
         camera for the new size)."""
+
+    def setFullscreen(self, enabled):
+        """False: the page's window is the browser's."""
+        return False
+
+    def setTitle(self, title):
+        """False: the page's title is the page's."""
+        return False
 
     def savePng(self, path):
         raise Unavailable("screenshots of the web view are taken by the page (canvas.toBlob)")

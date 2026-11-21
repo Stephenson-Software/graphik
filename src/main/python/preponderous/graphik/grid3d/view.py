@@ -152,6 +152,21 @@ class Grid3DView(ViewState):
         self.width, self.height = width, height
         self.display.resize(width, height)
 
+    def setFullscreen(self, enabled):
+        """Switches the window to desktop fullscreen (True) or back. Returns
+        False when the loaded Strata can't (0.7.0 has no fullscreen), the
+        view is headless (Strata refuses fullscreen without a window), or
+        it is closed."""
+        if not self.isWindow:
+            return False
+        return self.display.setFullscreen(enabled)
+
+    def setTitle(self, title):
+        """Names the window. Returns False when the loaded Strata can't
+        (0.7.0 sets the title only when the window opens), or the view is
+        closed."""
+        return self.display.setTitle(title)
+
     def savePng(self, path):
         """The last frame as a PNG (headless or windowed)."""
         self.display.savePng(path)

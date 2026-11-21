@@ -21,6 +21,7 @@ from preponderous.graphik.grid3d.ports import (
     SceneRenderer,
     StrataLoader,
     Surface,
+    WindowChrome,
 )
 
 from test_grid3d_view import fakeStrata
@@ -55,6 +56,14 @@ class FakeDisplay:
 
     def savePng(self, path):
         raise Unavailable("a fake has no pixels")
+
+    def setFullscreen(self, enabled):
+        self.fullscreen = bool(enabled)
+        return True
+
+    def setTitle(self, title):
+        self.title = title
+        return True
 
     def close(self):
         self.closed += 1
@@ -91,6 +100,7 @@ def adapters():
 @pytest.fixture
 def strataModule(monkeypatch):
     module = fakeStrata()
+    module.lib.has = lambda name: True  # a library with every call
     monkeypatch.setitem(sys.modules, "strata", module)
     monkeypatch.setattr(sys, "platform", "linux")
     monkeypatch.delenv("STRATA_LIBRARY", raising=False)
@@ -271,3 +281,13 @@ def test_outside_a_browser_there_are_no_page_objects(monkeypatch):
     monkeypatch.setattr(sys, "platform", "linux")
     assert PygbagPageObjects().get("Graphik3D") is None
     assert FakePage().get("Graphik3D") is None
+
+
+# -- WindowChrome
+
+
+def test_window_chrome_answers_whether_it_could(display):
+    assert isinstance(display, WindowChrome)
+    for answer in (display.setFullscreen(True), display.setFullscreen(False),
+                   display.setTitle("Game")):
+        assert answer in (True, False)

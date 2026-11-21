@@ -350,6 +350,14 @@ class Grid3DWebView(ViewState):
             self._sendView()
         return changed
 
+    def setFullscreen(self, enabled):
+        """As Grid3DView's; always False: the browser owns its window."""
+        return self.display.setFullscreen(enabled)
+
+    def setTitle(self, title):
+        """As Grid3DView's; always False: the page owns its title."""
+        return self.display.setTitle(title)
+
     def savePng(self, path):
         self.display.savePng(path)
 

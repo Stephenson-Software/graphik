@@ -40,7 +40,8 @@ def labelBytes(text):
 
 
 class StrataEngine:
-    """One engine of the binding: `strata` (the module), `lib` (the loaded
+    """A SceneRenderer, EventSource, Surface and WindowChrome over one
+    engine of the binding: `strata` (the module), `lib` (the loaded
     libstrata) and `engine` (a window or a headless surface), all three
     shown, since games call the binding directly too."""
 
@@ -99,6 +100,24 @@ class StrataEngine:
 
     def resize(self, width, height):
         self.engine.resize(width, height)
+
+    def setFullscreen(self, enabled):
+        """Desktop fullscreen, or back; False when the loaded Strata has no
+        strata_set_fullscreen (0.7.0 hasn't) or the engine is closed."""
+        setter = getattr(self.engine, "set_fullscreen", None)
+        if setter is None or not self.lib.has("strata_set_fullscreen"):
+            return False
+        setter(bool(enabled))
+        return True
+
+    def setTitle(self, title):
+        """The window's title; False when the loaded Strata can't (0.7.0
+        sets it only when the window opens) or the engine is closed."""
+        setter = getattr(self.engine, "set_title", None)
+        if setter is None or not self.lib.has("strata_set_title"):
+            return False
+        setter(title)
+        return True
 
     def savePng(self, path):
         """The last frame as a PNG (headless or windowed)."""

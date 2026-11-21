@@ -10,5 +10,7 @@ from .page_objects import PageObjects
 from .scene_renderer import SceneRenderer
 from .strata_loader import StrataLoader
 from .surface import Surface
+from .window_chrome import WindowChrome
 
-__all__ = ["EventSource", "GridRelay", "PageObjects", "SceneRenderer", "StrataLoader", "Surface"]
+__all__ = ["EventSource", "GridRelay", "PageObjects", "SceneRenderer", "StrataLoader", "Surface",
+           "WindowChrome"]
