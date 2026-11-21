@@ -58,6 +58,7 @@ from .adapters.pygbag_page_objects import PygbagPageObjects
 from .adapters.recording_relay import RecordingRelay
 from .adapters.relay_display import RelayDisplay
 
+from .animate import Animator  # noqa: F401  (grid3d.web had this name)
 from .events import (  # noqa: F401  (re-exported: grid3d.web's public names)
     EVENT_FINGER_CANCELED,
     EVENT_FINGER_DOWN,

@@ -44,8 +44,10 @@ from .adapters.binding_strata_loader import (  # noqa: F401  (re-exported)
     loadStrata,
 )
 from .adapters.strata_engine import _RENDER_ITEM, StrataEngine, labelBytes, renderItems  # noqa: F401
+from .animate import Animator  # noqa: F401  (grid3d.view had these names)
 from .errors import Unavailable
 from .geometry import FAR_PLANE, NEAR_PLANE, SUN_DIRECTION, ViewGeometry  # noqa: F401
+from .pick import cellScreenPosition, pickCell, projectToScreen  # noqa: F401
 from .state import ViewState
 
 # The composition root's default for open() on the desktop (a StrataLoader,

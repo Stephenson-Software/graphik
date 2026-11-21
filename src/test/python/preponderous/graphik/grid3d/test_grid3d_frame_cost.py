@@ -11,8 +11,8 @@ import types
 import pytest
 
 from preponderous.graphik.grid3d import CUBE, SPHERE, GridBoard, Piece, PieceStyle, Shape, Theme
-from preponderous.graphik.grid3d import web
-from preponderous.graphik.grid3d.view import renderItems
+from preponderous.graphik.grid3d import web, wire
+from preponderous.graphik.grid3d.adapters.strata_engine import renderItems
 
 
 class float3(ctypes.Array):
@@ -68,19 +68,19 @@ def test_render_items_match_the_real_binding():
 
 
 def slowBoard(scene, lights=()):
-    out = [web.header(web.BOARD), web.COUNTS.pack(len(scene), len(lights))]
-    out += [web._shape(s.kind, web.WORLD, 0, 0, s.position, s.scale, s.color) for s in scene]
-    out += [web._light(web.WORLD, 0, light) for light in lights]
+    out = [wire.header(wire.BOARD), wire.COUNTS.pack(len(scene), len(lights))]
+    out += [wire._shape(s.kind, wire.WORLD, 0, 0, s.position, s.scale, s.color) for s in scene]
+    out += [wire._light(wire.WORLD, 0, light) for light in lights]
     return b"".join(out)
 
 
 def test_a_board_is_encoded_in_one_pass_byte_for_byte_as_shape_by_shape():
     scene = shapes(200)
-    assert web.encodeBoard(scene) == slowBoard(scene)
+    assert wire.encodeBoard(scene) == slowBoard(scene)
     # a 3-part colour goes the slow way, padded with alpha 1
     mixed = scene[:3] + [Shape(CUBE, (0, 0, 0), (1, 1, 1), (0.5, 0.5, 0.5))]
-    assert web.encodeBoard(mixed) == slowBoard(mixed)
-    assert web.encodeBoard([]) == slowBoard([])
+    assert wire.encodeBoard(mixed) == slowBoard(mixed)
+    assert wire.encodeBoard([]) == slowBoard([])
 
 
 @pytest.mark.parametrize("bad", [math.nan, math.inf, -math.inf, 2.0e6])
@@ -91,13 +91,13 @@ def test_the_one_pass_board_refuses_what_the_shape_by_shape_one_did(bad):
         values = list(getattr(broken, where))
         values[1] = bad
         setattr(broken, where, tuple(values))
-        with pytest.raises(web.WireError) as error:
-            web.encodeBoard(scene)
+        with pytest.raises(wire.WireError) as error:
+            wire.encodeBoard(scene)
         assert error.value.status == -5
     scene = shapes(20)
     scene[3].color = (0.5, bad if bad != 2.0e6 else math.nan, 0.5, 1.0)
-    with pytest.raises(web.WireError):
-        web.encodeBoard(scene)
+    with pytest.raises(wire.WireError):
+        wire.encodeBoard(scene)
 
 
 def theme():
@@ -110,10 +110,10 @@ def test_set_board_does_not_resend_a_board_the_relay_already_has():
     view.setBoard(GridBoard(8, 8, theme()))
     view.setPieces([Piece(1, 2, 2, "pawn")])
     kinds = lambda: [m[4] for m in relay.messages]  # noqa: E731
-    first = kinds().count(web.BOARD)
+    first = kinds().count(wire.BOARD)
     view.setBoard(GridBoard(8, 8, theme()))  # the same board again, a new object
-    assert kinds().count(web.BOARD) == first == 1
+    assert kinds().count(wire.BOARD) == first == 1
     # the view and the pieces still go, as before
-    assert kinds()[-2:] == [web.VIEW, web.PIECES]
+    assert kinds()[-2:] == [wire.VIEW, wire.PIECES]
     view.setBoard(GridBoard(8, 8, theme()), tint=(1.0, 0.0, 0.0))  # changed: sent
-    assert kinds().count(web.BOARD) == 2
+    assert kinds().count(wire.BOARD) == 2

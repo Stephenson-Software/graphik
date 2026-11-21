@@ -17,8 +17,8 @@ from preponderous.graphik.grid3d import (
     measureText,
     wrapText,
 )
-from preponderous.graphik.grid3d import web
-from preponderous.graphik.grid3d.view import labelBytes
+from preponderous.graphik.grid3d import web, wire
+from preponderous.graphik.grid3d.adapters.strata_engine import labelBytes
 
 # -- text the font can't draw
 
@@ -34,11 +34,11 @@ def test_text_is_measured_in_characters_as_strata_draws_them_not_bytes():
 def test_label_bytes_are_utf8_without_nuls_and_with_lone_surrogates_as_question_marks():
     assert labelBytes("a\0bé") == b"ab\xc3\xa9"
     assert labelBytes("x\ud800y") == b"x?y"
-    assert web._labelText("x\ud800y") == b"x?y"
+    assert wire._labelText("x\ud800y") == b"x?y"
 
 
 def test_a_very_long_label_is_cut_on_a_character_boundary():
-    data = web._labelText("é" * 40000)  # 80000 bytes of two-byte characters
+    data = wire._labelText("é" * 40000)  # 80000 bytes of two-byte characters
     assert len(data) <= 65535
     data.decode("utf-8")  # no half character at the end
 
@@ -51,32 +51,32 @@ def board():
 
 
 @pytest.mark.parametrize("make,status", [
-    (lambda: web.encodeBoard([], [Light((0, 1, 0), (1, 1, 1), 0.0, 1.0)]), -5),           # no range
-    (lambda: web.encodeBoard([], [Light((0, 1, 0), (1, -1, 1), 2.0, 1.0)]), -5),          # negative colour
-    (lambda: web.encodeBoard([], [Light((0, 1, 0), (1, 1, 1), 2.0, -1.0)]), -5),          # negative intensity
-    (lambda: web.encodeBoard([], [Light((0, 1, 0), (1, 1, 1), 2.0, 1.0, True)] * 5), -6),  # five shadows
-    (lambda: web.encodeBoard([], [Light((0, 1, 0), (1, 1, 1), 2.0, 1.0)] * 33), -6),
-    (lambda: web.encodeBoard([Shape(CUBE, (float("nan"), 0, 0), (1, 1, 1), (1, 1, 1, 1))]), -5),
-    (lambda: web.encodeBoard([Shape(CUBE, (2e6, 0, 0), (1, 1, 1), (1, 1, 1, 1))]), -5),
-    (lambda: web.encodeHud([], [Panel(0, 0, 10, 10, (0, 0, 0, 1.5))]), -5),                # alpha over 1
-    (lambda: web.encodeHud([Label("x", 0, 0, 16, (-0.1, 1, 1, 1))]), -5),
-    (lambda: web.encodeHud([Label("x", float("inf"), 0, 16)]), -5),
-    (lambda: web.encodeHud([Label("x", 0, 0, 16)] * 4097), -6),
-    (lambda: web.encodeView(Camera((1, 2, 3), (1, 2, 3))), -5),
-    (lambda: web.encodeView(Camera((0, 5, 5), (0, 0, 0), 180.0)), -5),
-    (lambda: web.encodePieces(board(), [Piece(1, 0, 0, "p")], {}, -0.5), -5),
-    (lambda: web.encodePieces(board(), [Piece(1, 0, 0, "p")], {1: ((3e6, 0.0), (0.0, 0.0))}, 0.5), -5),
+    (lambda: wire.encodeBoard([], [Light((0, 1, 0), (1, 1, 1), 0.0, 1.0)]), -5),           # no range
+    (lambda: wire.encodeBoard([], [Light((0, 1, 0), (1, -1, 1), 2.0, 1.0)]), -5),          # negative colour
+    (lambda: wire.encodeBoard([], [Light((0, 1, 0), (1, 1, 1), 2.0, -1.0)]), -5),          # negative intensity
+    (lambda: wire.encodeBoard([], [Light((0, 1, 0), (1, 1, 1), 2.0, 1.0, True)] * 5), -6),  # five shadows
+    (lambda: wire.encodeBoard([], [Light((0, 1, 0), (1, 1, 1), 2.0, 1.0)] * 33), -6),
+    (lambda: wire.encodeBoard([Shape(CUBE, (float("nan"), 0, 0), (1, 1, 1), (1, 1, 1, 1))]), -5),
+    (lambda: wire.encodeBoard([Shape(CUBE, (2e6, 0, 0), (1, 1, 1), (1, 1, 1, 1))]), -5),
+    (lambda: wire.encodeHud([], [Panel(0, 0, 10, 10, (0, 0, 0, 1.5))]), -5),                # alpha over 1
+    (lambda: wire.encodeHud([Label("x", 0, 0, 16, (-0.1, 1, 1, 1))]), -5),
+    (lambda: wire.encodeHud([Label("x", float("inf"), 0, 16)]), -5),
+    (lambda: wire.encodeHud([Label("x", 0, 0, 16)] * 4097), -6),
+    (lambda: wire.encodeView(Camera((1, 2, 3), (1, 2, 3))), -5),
+    (lambda: wire.encodeView(Camera((0, 5, 5), (0, 0, 0), 180.0)), -5),
+    (lambda: wire.encodePieces(board(), [Piece(1, 0, 0, "p")], {}, -0.5), -5),
+    (lambda: wire.encodePieces(board(), [Piece(1, 0, 0, "p")], {1: ((3e6, 0.0), (0.0, 0.0))}, 0.5), -5),
 ])
 def test_the_encoders_refuse_what_the_relay_would_with_its_status(make, status):
-    with pytest.raises(web.WireError) as error:
+    with pytest.raises(wire.WireError) as error:
         make()
     assert error.value.status == status
 
 
 def test_the_relays_limits_are_reached_but_not_passed_by_a_real_board():
     big = GridBoard(64, 64, mergeTiles=False)
-    message = web.encodeBoard(big.boardShapes(), [Light((0, 3, 0), (1, 1, 1), 5.0, 1.0, True)] * 4)
-    kind, contents = web.decode(message)
+    message = wire.encodeBoard(big.boardShapes(), [Light((0, 3, 0), (1, 1, 1), 5.0, 1.0, True)] * 4)
+    kind, contents = wire.decode(message)
     assert len(contents["shapes"]) == 64 * 64 + 4
 
 
@@ -85,6 +85,6 @@ def test_a_web_view_refuses_a_bad_hud_before_sending_it():
     view = web.Grid3DWebView.open(400, 300, relay=relay)
     view.setBoard(board())
     sent = len(relay.messages)
-    with pytest.raises(web.WireError):
+    with pytest.raises(wire.WireError):
         view.setLabels([], [Panel(0, 0, 10, 10, (0, 0, 0, 2.0))])
     assert len(relay.messages) == sent
