@@ -513,7 +513,7 @@ def test_the_template_is_package_data_with_the_relay_and_a_3d_toggle():
     assert '<canvas id="relay" hidden' in page
     assert 'id="graphik3d"' in page and "window.Graphik3D" in page
     # 3D loads only when asked for, and 2D comes back when it can't
-    assert page.index("StrataGridRelay.request(") > page.index("function start(")
+    assert page.index("relay.request(JSON.stringify(") > page.index("function start(")
     assert 'state.indexOf("failed:") === 0' in page and "show2d(true)" in page
     # pygbag's own canvas is still there, and its python block intact
     assert 'id="canvas"' in page and "asyncio.run( custom_site() )" in page
@@ -556,7 +556,7 @@ def test_2d_shows_until_3d_draws_the_game_and_comes_back_with_a_reason():
     block = graphikBlock(templatePage())
     # the 2D canvas hides only once the game has sent the 3D view something
     assert "fed = true" in block
-    assert 'const drawing = state === "ready" && fed;' in block
+    assert 'const drawing = state === "ready" && fed && !(c && c.hidden);' in block
     assert "if (drawing) show2d(false);" in block
     # failures say why, in words, on the page
     assert 'id="graphik3d-note"' in block and 'role="status"' in block

@@ -578,7 +578,14 @@ frameborder="1"
   function start() {
     // the engine starts loading at once; the game's Grid3DWebView.open()
     // finds it already loading
-    window.StrataGridRelay.request(JSON.stringify({canvas: "relay", title: document.title || "the 3D view"}));
+    const relay = window.StrataGridRelay;
+    // Strata 0.9.0's relay forgets a close() that came while it loaded: it
+    // finishes "ready" on a hidden canvas, and request() then returns at once
+    // without showing it, so 3D would replace 2D with nothing. Closing it
+    // again first makes request() show it (a newer relay does this itself).
+    const c = canvas3d();
+    if (relay.state() === "ready" && c && c.hidden) relay.close();
+    relay.request(JSON.stringify({canvas: "relay", title: document.title || "the 3D view"}));
   }
   function set(value, reason) {
     on = value ? 1 : 0;
@@ -608,9 +615,16 @@ frameborder="1"
   // comes back if 3D fails, so there is always a view on screen.
   setInterval(function () {
     const relay = scripts === "ready" ? window.StrataGridRelay : null;
-    if (!on || !relay) return;
+    if (!relay) return;
     const state = relay.state();
-    const drawing = state === "ready" && fed;
+    if (!on) {
+      // 2D was chosen while the 3D view loaded: once it is in, it stops
+      // drawing (Strata 0.9.0's relay would draw on, hidden, for nothing)
+      if (state === "ready") relay.close();
+      return;
+    }
+    const c = canvas3d();
+    const drawing = state === "ready" && fed && !(c && c.hidden);
     show3d(drawing);
     if (drawing) show2d(false);
     else if (state.indexOf("failed:") === 0) fail(state.slice(7));
