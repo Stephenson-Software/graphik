@@ -47,9 +47,25 @@ class Grid3DView(ViewState):
 
     def __init__(self, strata, lib, engine, width, height, isWindow,
                  reducedMotion=False, clock=time.monotonic):
+        self._attach(StrataEngine(strata, lib, engine), width, height, isWindow,
+                     reducedMotion, clock)
+
+    @classmethod
+    def using(cls, display, width, height, isWindow=True, reducedMotion=False,
+              clock=time.monotonic):
+        """A view that draws on `display`: a SceneRenderer, an EventSource
+        and a Surface (ports/) whose `strata` names the event types, as
+        StrataLoader.open() returns. For tests and tools; open() is the way
+        a game gets one."""
+        view = cls.__new__(cls)
+        view._attach(display, width, height, isWindow, reducedMotion, clock)
+        return view
+
+    def _attach(self, display, width, height, isWindow, reducedMotion, clock):
         ViewState.__init__(self, width, height, reducedMotion=reducedMotion, clock=clock)
-        self.display = StrataEngine(strata, lib, engine)
+        self.display = display
         self.isWindow = isWindow
+        strata = display.strata
         self.EVENT_QUIT = strata.EVENT_QUIT
         self.EVENT_KEY_DOWN = strata.EVENT_KEY_DOWN
         self.EVENT_KEY_UP = strata.EVENT_KEY_UP
@@ -69,8 +85,8 @@ class Grid3DView(ViewState):
             return Grid3DWebView.open(width, height, title,
                                       reducedMotion=reducedMotion or None, clock=clock)
         display = BindingStrataLoader().open(width, height, title, headless)
-        return cls(display.strata, display.lib, display.engine, width, height, not headless,
-                   reducedMotion=reducedMotion, clock=clock)
+        return cls.using(display, width, height, not headless,
+                         reducedMotion=reducedMotion, clock=clock)
 
     # -- what to draw
 

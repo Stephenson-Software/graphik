@@ -11,9 +11,9 @@ from .pygbag_page_objects import PygbagPageObjects
 class PlatformRelay:
     """The page's window.StrataGridRelay, through pygbag's platform.window."""
 
-    def __init__(self, relay=None):
+    def __init__(self, relay=None, page=None):
         if relay is None:
-            relay = PygbagPageObjects().get("StrataGridRelay")
+            relay = (page or PygbagPageObjects()).get("StrataGridRelay")
             if relay is None:
                 raise Unavailable(
                     "this page has no 3D view (grid-relay.js isn't loaded; on graphik's "

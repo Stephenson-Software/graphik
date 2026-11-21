@@ -157,10 +157,14 @@ def templatePath(defaultView="3d"):
 # -- transports: adapters/platform_relay.py and adapters/recording_relay.py
 
 
+# The page's JS objects (a PageObjects port): window.<name> under pygbag.
+PAGE = PygbagPageObjects()
+
+
 def pageObject(name):
     """window.<name> under pygbag, or None (not in a browser, or no such
     object on the page)."""
-    return PygbagPageObjects().get(name)
+    return PAGE.get(name)
 
 
 def wants3D():
@@ -243,7 +247,7 @@ class Grid3DWebView(ViewState):
         """Ask the page for its 3D view (it is downloaded only now, and only
         under maxBytes); raise Unavailable when there is none. `ready` says
         when it has loaded; what is sent before then waits in the page."""
-        relay = relay or PlatformRelay()
+        relay = relay or PlatformRelay(page=PAGE)
         state = relay.request({"canvas": canvas, "maxBytes": maxBytes, "title": title})
         if state.startswith("failed:"):
             raise Unavailable(state[len("failed:"):])
