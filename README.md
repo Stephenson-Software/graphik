@@ -98,6 +98,10 @@ and runs on Linux and Windows desktops, and in the browser under pygbag
 pip install "graphik[strata] @ https://github.com/Stephenson-Software/graphik/archive/refs/tags/v0.5.3.zip"
 ```
 
+![A 9 by 7 grid3d board drawn headless by Strata: green checker tiles in a wooden frame, a red snake of chained segments with a pale green head and eyes, a glowing red pickup, a crate, a blue post, a yellow token and a "Score 120" label](docs/images/grid3d.png)
+
+<sub>`Grid3DView.open(..., headless=True)` and `savePng`, from `scripts/make_readme_images.py`. Ophidian, Apex and Tic Tak Toe draw their 3D views with the same calls, on the desktop and [in the browser](https://danielstephenson.dev/play/ophidian).</sub>
+
 ```python
 from preponderous.graphik.grid3d import (
     SPHERE, Grid3DView, GridBoard, Label, Piece, PieceStyle, Theme, Unavailable,
@@ -138,6 +142,10 @@ So that games stop hand-building the same pieces:
 - **Phones held upright.** Since 0.5.2 `fitCamera` frames a portrait window (aspect below 1) for its shape: the camera looks down more steeply (70 degrees rather than about 55), the board fills the window's width and stands in the middle of the space below a HUD, and a large board no longer runs off the sides. Landscape and square windows keep 0.5.1's framing exactly; between an aspect of 0.8 and 1 the two blend, so a resize across square doesn't jump. `fitCamera(columns, rows, aspect, top=..., bottom=...)` (and `board.camera`, `board.scene`) keep fractions of the window's height clear at the top (a HUD) and the bottom (a bar of touch keys), in any window shape; a view takes them in pixels with `view.setInsets(top=..., bottom=...)`, and picking, `cellScreenPosition` and the web view's camera follow.
 - **On-screen keys for touch screens.** `TouchKeys([TouchKey("Pause", "space"), TouchKey("Shop", "p"), ...])` lays out a bar of labelled buttons along the bottom of the screen, each at least 44 CSS pixels each way, in rows of equal buttons (up to three rows on a portrait screen, one on a landscape one; when the keys don't all fit, the last button is *More*, which pages through the rest). A tap on one, `keys.press(position, width, height, pygame, scale)`, posts the same `KEYDOWN` and `KEYUP` the keyboard would (marked `touchKey=True`), so the game's own key handling does the work in both views; a press off the bar returns `None` and is the game's. The 2D view draws the bar with `keys.draw(graphik, width, height, scale)`, the 3D view adds `keys.overlay(width, height)` (labels and panels) to its HUD, both from one `keys.layout(...)` and one hit test. Sizes are worked out in CSS pixels: `scale` is the surface's CSS pixels per pixel (1 for the web view; for a 2D canvas the browser scales, see `keys.below(width, height, pageWidth, pageHeight)`, which gives the band to add under a 2D board and the canvas's scale). `keys.bandHeight(...)` is how much of the screen the bar takes, for `view.setInsets(bottom=...)` and the HUD. Show the keys only on touch screens: `grid3d.web.touchScreen()` is true when the page sees a coarse pointer or a touch (`?touch=1` or `?touch=0` in the address says so for testing; `GRAPHIK_TOUCH=1` outside a browser).
 
+  <img src="docs/images/touch-keys.png" width="380" alt="Ophidian on a 390 by 844 phone with graphik 0.5.2: in 3D (left) the board framed for portrait with the HUD above and a bar of Pause, Shop, Retry, Skin and Speed keys along the bottom; in 2D (right) the same five keys drawn under the 2D board">
+
+  <sub>Ophidian's browser build on a phone, from its end-to-end run on graphik 0.5.2: the same `TouchKeys` bar in the 3D view's HUD and drawn with Graphik under the 2D board.</sub>
+
 ### In the browser
 
 Under [pygbag](https://pypi.org/project/pygbag/) (`sys.platform == "emscripten"`), `Grid3DView.open()` returns a `grid3d.web.Grid3DWebView`: the same calls, drawn by Strata's grid relay, a small Strata web-kit scene in the page (Strata's `web/kit/grid-relay`, whose `WIRE.md` specifies the messages). Python sends the board, each tick's pieces, the HUD and the camera as small versioned binary messages; the page slides the pieces between ticks itself, so nothing is sent per display frame. A game that builds whole `Scene`s can keep calling `drawScene()` every frame; only what changed is sent.
@@ -176,7 +184,7 @@ pytest
 The suite is headless: `src/test/python/conftest.py` sets `SDL_VIDEODRIVER`/`SDL_AUDIODRIVER` to `dummy` before pygame touches a display, so no window is created and the tests run on a machine with no display attached. `pytest` alone works from the repo root because `[tool.pytest.ini_options]` in `pyproject.toml` points `testpaths` at `src/test/python` and `pythonpath` at `src/main/python`. `.github/workflows/test.yml` runs the same `pip install -e ".[test]"` + `pytest` sequence — preceded by a compile check and an import smoke test, across the supported Python versions — on every pull request and on every push to `main`. A second job, *Install from a release archive*, packs the commit the way GitHub serves a tag's archive, installs it into a fresh venv as a consumer would, and draws with it. A push to a branch with no open pull request is not covered, so run `pytest` locally before opening one.
 
 The README images are generated, not hand-made. After changing how something draws, regenerate them with
-`SDL_VIDEODRIVER=dummy python scripts/make_readme_images.py` and commit the updated `docs/images/*.png`.
+`SDL_VIDEODRIVER=dummy python scripts/make_readme_images.py` and commit the updated `docs/images/*.png` (`docs/images/grid3d.png` is drawn only where Strata's Python binding is installed and can render headless).
 
 ## Projects
 The games that use graphik are listed under [Dependents](#dependents) above.
