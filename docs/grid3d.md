@@ -24,7 +24,8 @@ Contents: [Scene data](#scene-data) · [Boards and pieces](#boards-and-pieces) �
 [Text](#text) · [Buttons and 2D screens](#buttons-and-2d-screens) ·
 [Touch keys](#touch-keys) ·
 [The desktop view](#the-desktop-view) · [The browser view](#the-browser-view) ·
-[The wire format](#the-wire-format) · [Fetching the relay](#fetching-the-relay)
+[The wire format](#the-wire-format) · [Fetching the relay](#fetching-the-relay) ·
+[How the views are built](#how-the-views-are-built)
 
 ## Scene data
 
@@ -262,6 +263,9 @@ if web.touchScreen():
 | `view.drawScene(scene, present=True)` | Draws a `Scene` a game built itself |
 | `view.pollEvents()` | Every pending Strata event (`view.EVENT_QUIT`, `EVENT_KEY_DOWN`, `EVENT_KEY_UP`, `EVENT_RESIZED`, ...) |
 | `view.resize(width, height)`, `view.savePng(path)`, `view.close()` | |
+| `view.setFullscreen(enabled)`, `view.setTitle(title)` | Desktop fullscreen on or off; the window's title. Each returns `False` when it can't: the loaded Strata lacks the call (0.8.0 has no `strata_set_title`), the view is closed, or (fullscreen) headless |
+| `view.strata`, `view.lib`, `view.engine` | The binding, the loaded library and the engine, for calls graphik doesn't wrap. Prefer the view's own methods where there is one |
+| `Grid3DView.using(display, width, height, isWindow=True, reducedMotion=False, clock=time.monotonic)` | A view drawing on any display that has the view's ports ([below](#how-the-views-are-built)): for tests and tools |
 | `Unavailable` | Why 3D can't run here, in words a player can act on |
 | `STRATA_VERSION` | The Strata release the binding loads (`STRATA_LIBRARY` points at a local build instead) |
 
@@ -292,7 +296,7 @@ the relay next to it ([Fetching the relay](#fetching-the-relay)).
 
 | Name | What it is |
 |---|---|
-| `Grid3DWebView` | `Grid3DView`'s calls (`setBoard`, `setPieces`, `setLabels`, `frame`, `scene`, `drawScene`, `pollEvents`, `resize`, `close`, picking) drawn by the relay. `frame()` does nothing: the page slides pieces itself. `drawScene()` sends only what changed. `savePng()` raises `Unavailable` |
+| `Grid3DWebView` | `Grid3DView`'s calls (`setBoard`, `setPieces`, `setLabels`, `frame`, `scene`, `drawScene`, `pollEvents`, `resize`, `close`, picking) drawn by the relay. `frame()` does nothing: the page slides pieces itself. `drawScene()` sends only what changed. `savePng()` raises `Unavailable`; `setFullscreen()` and `setTitle()` return `False` (the browser owns its window, the page its title) |
 | `Grid3DWebView.open(width, height, title, relay=None, maxBytes=4000000, reducedMotion=None, clock, canvas="relay")` | Asks the page for its 3D view; raises `Unavailable` when there is none or it failed |
 | `view.ready`, `view.failure()` | Loaded yet; why it couldn't load |
 | `templatePath(defaultView="3d")` | The pygbag page template, starting in 3D (or 2D) unless `?view=` or the player's last choice says otherwise |
@@ -306,7 +310,8 @@ the relay next to it ([Fetching the relay](#fetching-the-relay)).
 | `pygameKey(scancode, pygame)` | The pygame key for a USB HID scancode, or 0 |
 | `Event` | A relay event: `type`, `scancode`, `modifiers`, `repeat`, `button`, `width`, `height`, `x`, `y`, `dx`, `dy`, `text`, `pointer`, `id`, `nx`, `ny`, `key`, `pressure` |
 | `EVENTS`, `EVENT_*` | Event type numbers, Strata's and the web's `FINGER_*` |
-| `PlatformRelay(relay=None)` | The transport to the page's `window.StrataGridRelay` |
+| `PlatformRelay(relay=None, page=None)` | The transport to the page's `window.StrataGridRelay` (found through `page`, `PAGE` by default) |
+| `PAGE` | Where the page helpers look for the page's objects (a `PageObjects`); a test can put a fake here |
 | `RecordingRelay(reducedMotion=False, state="ready")` | A transport that keeps what it is sent: for tests, and `wireJson()` for the relay's test page |
 
 ```python
@@ -397,3 +402,40 @@ kept. Only a release version (`0.9.0`, `1.0.0-rc.1`) is taken for `--strata`.
 | `tarballName(version)` | The release asset's name |
 | `RelayFetchError` | Why it couldn't fetch, verify or unpack |
 | `main(argv=None)` | The command line |
+
+## How the views are built
+
+The two views share one core and differ only in what they draw on. Each
+part of the outside world they touch sits behind a port (an interface, one
+per file in `grid3d/ports/`), implemented by adapters (one per file in
+`grid3d/adapters/`), and `view.py` and `web.py` wire the production
+adapters in as defaults:
+
+```
+game -> Grid3DView (view.py)    -> ViewState, geometry, scene/board/animate/pick -> ports <- adapters
+     -> Grid3DWebView (web.py)  -> ViewState, wire, events                       -> ports <- adapters
+```
+
+| Port | Question it answers | Adapters |
+|---|---|---|
+| `StrataLoader` | Can Strata run here? Open an engine | `BindingStrataLoader` (`view.STRATA_LOADER`) |
+| `SceneRenderer` | Draw this Scene now | `StrataEngine`, `RelayDisplay` |
+| `EventSource` | What input came since the last poll? | `StrataEngine`, `RelayDisplay` |
+| `Surface` | Resize, snapshot, close | `StrataEngine`, `RelayDisplay` |
+| `WindowChrome` | Fullscreen and the window's title | `StrataEngine`, `RelayDisplay` |
+| `GridRelay` | Talk to the page's grid relay | `PlatformRelay`, `RecordingRelay` |
+| `PageObjects` | Which of the page's JS objects exist? | `PygbagPageObjects` (`web.PAGE`) |
+
+The model and core (`errors.py`, `geometry.py`, `state.py`, `wire.py`,
+`events.py`, and the scene, board, animation, picking, text, button and
+touch-key modules) import no adapter and no view; `test_grid3d_architecture.py`
+fails if one does, or if a port or adapter file holds more than one class.
+Every port has a contract test (`test_grid3d_ports.py`) that its fake and its
+production adapters all pass. `grid3d.view` and `grid3d.web` still export
+every name they did in 0.5.3.
+
+To draw on something new (another engine, a recorder), write one adapter
+file with the `SceneRenderer`, `EventSource`, `Surface` and `WindowChrome`
+calls, add it to `adapters/__init__.py`, and hand it to
+`Grid3DView.using(display, ...)`, or, for `open()`, add a `StrataLoader`
+that returns it.

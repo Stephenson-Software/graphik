@@ -29,7 +29,7 @@ from preponderous.graphik.grid3d import (
     Shape,
     Theme,
 )
-from preponderous.graphik.grid3d import web
+from preponderous.graphik.grid3d import wire
 
 GOLDEN = os.path.join(os.path.dirname(__file__), "golden", "wire-1.0.hex")
 ORDER = ("board", "view", "pieces", "hud")
@@ -56,12 +56,12 @@ TRACKS = {"h": ((-1.0, -0.5), (0.0, -0.5)), "b": ((-1.0, 0.5), (0.0, 0.5))}
 
 def messages():
     return {
-        "board": web.encodeBoard(BOARD.boardShapes(),
+        "board": wire.encodeBoard(BOARD.boardShapes(),
                                  [Light((0.0, 3.0, 0.0), (1.0, 0.9, 0.8), 6.0, 1.2, True)]),
-        "view": web.encodeView(BOARD.camera(4 / 3.0)),
-        "pieces": web.encodePieces(BOARD, PIECES, TRACKS, 0.25),
+        "view": wire.encodeView(BOARD.camera(4 / 3.0)),
+        "pieces": wire.encodePieces(BOARD, PIECES, TRACKS, 0.25),
         # non-ASCII text: an em dash and two accented letters, 17 bytes of UTF-8
-        "hud": web.encodeHud([Label("Score 3 — été", 12.0, 8.0, 16.0)],
+        "hud": wire.encodeHud([Label("Score 3 — été", 12.0, 8.0, 16.0)],
                              [Panel(4.0, 4.0, 200.0, 32.0, (0.0, 0.0, 0.0, 0.6))]),
     }
 
@@ -98,31 +98,31 @@ def test_the_encoder_writes_the_golden_bytes():
 
 def test_the_golden_bytes_read_back_as_the_scene():
     golden = readGolden()
-    kind, board = web.decode(golden["board"])
-    assert kind == web.BOARD
+    kind, board = wire.decode(golden["board"])
+    assert kind == wire.BOARD
     assert len(board["shapes"]) == 6 + 4  # six tiles, four frame sides
     assert board["lights"][0]["castShadows"] and board["lights"][0]["radius"] == pytest.approx(6.0)
 
-    kind, view = web.decode(golden["view"])
-    assert kind == web.VIEW
+    kind, view = wire.decode(golden["view"])
+    assert kind == wire.VIEW
     camera = BOARD.camera(4 / 3.0)
     assert view["eye"] == pytest.approx(camera.eye)
     assert view["target"] == pytest.approx(camera.target)
-    assert view["sun"] == pytest.approx(web.SUN_DIRECTION)
+    assert view["sun"] == pytest.approx(wire.SUN_DIRECTION)
 
-    kind, pieces = web.decode(golden["pieces"])
-    assert kind == web.PIECES
+    kind, pieces = wire.decode(golden["pieces"])
+    assert kind == wire.PIECES
     assert pieces["tickSeconds"] == 0.25
     assert pieces["anchors"] == [(-1.0, -0.5, 0.0, -0.5), (-1.0, 0.5, 0.0, 0.5), (1.0, 0.5, 1.0, 0.5)]
     attach = [(s["attach"], s["a"], s["b"]) for s in pieces["shapes"]]
     # head and its eye on anchor 0, the body on 1, the gem on 2, then the bridge from 0 to 1
-    assert attach == [(web.PIECE, 0, 0), (web.PIECE, 0, 0), (web.PIECE, 1, 0), (web.PIECE, 2, 0),
-                      (web.BRIDGE, 0, 1)]
+    assert attach == [(wire.PIECE, 0, 0), (wire.PIECE, 0, 0), (wire.PIECE, 1, 0), (wire.PIECE, 2, 0),
+                      (wire.BRIDGE, 0, 1)]
     assert pieces["shapes"][1]["position"] == pytest.approx((0.15, 0.5, 0.3))  # the eye, from its piece
-    assert [(l["attach"], l["a"]) for l in pieces["lights"]] == [(web.PIECE, 2)]
+    assert [(l["attach"], l["a"]) for l in pieces["lights"]] == [(wire.PIECE, 2)]
 
-    kind, hud = web.decode(golden["hud"])
-    assert kind == web.HUD
+    kind, hud = wire.decode(golden["hud"])
+    assert kind == wire.HUD
     assert hud["labels"][0]["text"] == "Score 3 — été"
     assert hud["panels"][0]["rect"] == (4.0, 4.0, 200.0, 32.0)
     # 8 header + 8 counts + 32 panel + 32 label + 17 text bytes padded to 20

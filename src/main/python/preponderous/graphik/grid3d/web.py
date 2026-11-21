@@ -39,82 +39,98 @@ buttonArea() says where, so a game's HUD can stay out from under it, and
 touchScreen() whether the page is on a touch screen, where a game shows its
 on-screen keys (touchkeys.py).
 
+This module is the browser view's composition root: Grid3DWebView keeps
+what it shows in a ViewState (state.py) and draws on a RelayDisplay over a
+GridRelay (PlatformRelay by default); the page helpers read the page
+through PAGE (a PageObjects). The wire format (wire.py), the events
+(events.py) and the relays (adapters/) are re-exported here under their
+old names.
+
 Pure Python (struct, base64, json); pygbag's `platform` only in a browser.
 """
-
-import base64
-import json
-import math
 import os
-import struct
 import sys
 import tempfile
 import time
-from types import SimpleNamespace
 
-from .animate import Animator
-from .scene import CLEAR_COLOR, checkLights
-from .view import ViewGeometry, Unavailable
+from .adapters.platform_relay import PlatformRelay
+from .adapters.pygbag_page_objects import PygbagPageObjects
+from .adapters.recording_relay import RecordingRelay
+from .adapters.relay_display import RelayDisplay
 
-WIRE_MAJOR, WIRE_MINOR = 1, 0
-MAGIC = b"G3"
-BOARD, PIECES, HUD, VIEW = 1, 2, 3, 4
-KINDS = (BOARD, PIECES, HUD, VIEW)
-WORLD, PIECE, BRIDGE = 0, 1, 2
-
-HEADER = struct.Struct("<2sBBBBH")  # 8 bytes
-SHAPE = struct.Struct("<BBHHH3f3f4f")  # 48 bytes
-LIGHT = struct.Struct("<BBH3f3fff")  # 36 bytes
-ANCHOR = struct.Struct("<4f")  # 16 bytes
-PANEL = struct.Struct("<4f4f")  # 32 bytes
-LABEL = struct.Struct("<3f4fHH")  # 32 bytes, then the text padded to 4
-VIEW_BODY = struct.Struct("<3f3f3f4f3f")  # 64 bytes
-COUNTS = struct.Struct("<II")
-PIECES_HEAD = struct.Struct("<fIII")
-
-# The relay's limits and value checks (WIRE.md, "Errors"; relay.h). The
-# encoders below check them too, so a message the relay would refuse raises
-# WireError where the game made it, with the relay's status, whatever relay
-# the page carries.
-MAX_SHAPES = 1 << 16
-MAX_ANCHORS = 1 << 15
-MAX_LIGHTS = 32
-MAX_SHADOWED_LIGHTS = 4
-MAX_HUD_ITEMS = 4096
-MAX_COORDINATE = 1.0e6
-_FLOAT_MAX = 3.4028234663852886e38
-
-# Grid3DView's lighting and projection (view.py), sent with every VIEW so the
-# relay draws what the desktop draws.
-SUN_DIRECTION = (-0.45, 0.85, 0.35)
-NEAR_PLANE, FAR_PLANE = 0.3, 200.0
-
-# Strata's event types (strata.h) and the web relay's additions.
-EVENT_QUIT, EVENT_KEY_DOWN, EVENT_KEY_UP = 1, 2, 3
-EVENT_MOUSE_MOTION, EVENT_MOUSE_BUTTON_DOWN, EVENT_MOUSE_BUTTON_UP = 4, 5, 6
-EVENT_MOUSE_WHEEL, EVENT_RESIZED, EVENT_TEXT_INPUT = 7, 8, 9
-EVENT_FINGER_DOWN, EVENT_FINGER_UP, EVENT_FINGER_MOTION, EVENT_FINGER_CANCELED = 16, 17, 18, 19
-
-# Stands in for the strata module where games read event types from it
-# (view.strata.EVENT_QUIT), so the same loop reads desktop and web events.
-EVENTS = SimpleNamespace(
-    EVENT_QUIT=EVENT_QUIT, EVENT_KEY_DOWN=EVENT_KEY_DOWN, EVENT_KEY_UP=EVENT_KEY_UP,
-    EVENT_MOUSE_MOTION=EVENT_MOUSE_MOTION, EVENT_MOUSE_BUTTON_DOWN=EVENT_MOUSE_BUTTON_DOWN,
-    EVENT_MOUSE_BUTTON_UP=EVENT_MOUSE_BUTTON_UP, EVENT_MOUSE_WHEEL=EVENT_MOUSE_WHEEL,
-    EVENT_RESIZED=EVENT_RESIZED, EVENT_TEXT_INPUT=EVENT_TEXT_INPUT,
-    EVENT_FINGER_DOWN=EVENT_FINGER_DOWN, EVENT_FINGER_UP=EVENT_FINGER_UP,
-    EVENT_FINGER_MOTION=EVENT_FINGER_MOTION, EVENT_FINGER_CANCELED=EVENT_FINGER_CANCELED,
+from .animate import Animator  # noqa: F401  (grid3d.web had this name)
+from .events import (  # noqa: F401  (re-exported: grid3d.web's public names)
+    EVENT_FINGER_CANCELED,
+    EVENT_FINGER_DOWN,
+    EVENT_FINGER_MOTION,
+    EVENT_FINGER_UP,
+    EVENT_KEY_DOWN,
+    EVENT_KEY_UP,
+    EVENT_MOUSE_BUTTON_DOWN,
+    EVENT_MOUSE_BUTTON_UP,
+    EVENT_MOUSE_MOTION,
+    EVENT_MOUSE_WHEEL,
+    EVENT_QUIT,
+    EVENT_RESIZED,
+    EVENT_TEXT_INPUT,
+    EVENTS,
+    Event,
+    _KEY_NAMES,
+    _MODS,
+    pygameKey,
+    toPygameEvents,
 )
-
-# What the relay's send() returns for a refused message (WIRE.md, "Errors").
-STATUS = {
-    -1: "not a grid relay message",
-    -2: "another major version of the wire format",
-    -3: "truncated",
-    -4: "unknown message kind",
-    -5: "a bad value",
-    -6: "over the relay's limits",
-}
+from .geometry import FAR_PLANE, NEAR_PLANE, SUN_DIRECTION, ViewGeometry  # noqa: F401
+from .scene import CLEAR_COLOR, checkLights  # noqa: F401
+from .errors import Unavailable
+from .state import ViewState
+from .wire import (  # noqa: F401  (re-exported: grid3d.web's public names)
+    ANCHOR,
+    BOARD,
+    BRIDGE,
+    COUNTS,
+    HEADER,
+    HUD,
+    KINDS,
+    LABEL,
+    LIGHT,
+    MAGIC,
+    MAX_ANCHORS,
+    MAX_COORDINATE,
+    MAX_HUD_ITEMS,
+    MAX_LIGHTS,
+    MAX_SHADOWED_LIGHTS,
+    MAX_SHAPES,
+    PANEL,
+    PIECE,
+    PIECES,
+    PIECES_HEAD,
+    SHAPE,
+    STATUS,
+    VIEW,
+    VIEW_BODY,
+    WIRE_MAJOR,
+    WIRE_MINOR,
+    WORLD,
+    WireError,
+    _FLOAT_MAX,
+    _checkCounts,
+    _finite,
+    _hudColor,
+    _labelText,
+    _light,
+    _rgba,
+    _shape,
+    _within,
+    _worldShapes,
+    decode,
+    encodeBoard,
+    encodeHud,
+    encodePieces,
+    encodeView,
+    header,
+    readHeader,
+)
 
 TEMPLATE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "templates", "pygbag.tmpl")
 
@@ -146,342 +162,17 @@ def templatePath(defaultView="3d"):
         handle.write(page)
     return path
 
-
-# -- the wire format (Strata's web/kit/grid-relay/WIRE.md, format 1.0)
-
-
-class WireError(ValueError):
-    """A message the relay would refuse. `status` is the relay's code."""
-
-    def __init__(self, status, detail=""):
-        self.status = status
-        reason = STATUS.get(status, "status %d" % status)
-        super().__init__(reason + (": " + detail if detail else ""))
+# -- transports: adapters/platform_relay.py and adapters/recording_relay.py
 
 
-def header(kind):
-    return HEADER.pack(MAGIC, WIRE_MAJOR, WIRE_MINOR, kind, 0, 0)
-
-
-def _rgba(color):
-    color = tuple(color)
-    return (color + (1.0,) * (4 - len(color)))[:4]
-
-
-def _finite(values, what):
-    for v in values:
-        if not (abs(v) <= _FLOAT_MAX):  # also false for NaN
-            raise WireError(-5, "%s has %r, not a finite number" % (what, v))
-
-
-def _within(values, what):
-    for v in values:
-        if not (abs(v) <= MAX_COORDINATE):
-            raise WireError(-5, "%s has %r, past the relay's +/-%g" % (what, v, MAX_COORDINATE))
-
-
-def _shape(kind, attach, a, b, position, scale, color):
-    color = _rgba(color)
-    _within(position, "a shape's position")
-    _within(scale, "a shape's scale")
-    _finite(color, "a shape's colour")
-    return SHAPE.pack(kind, attach, a, b, 0, *position, *scale, *color)
-
-
-def _light(attach, a, light, offset=(0.0, 0.0)):
-    x, y, z = light.position
-    position = (x - offset[0], y, z - offset[1])
-    _within(position, "a light's position")
-    _finite(light.color, "a light's colour")
-    if not (0.0 < light.radius <= MAX_COORDINATE):
-        raise WireError(-5, "a light's radius is %r; the engine takes 0 < radius" % (light.radius,))
-    if not (0.0 <= light.intensity <= _FLOAT_MAX) or min(light.color) < 0.0:
-        raise WireError(-5, "a light's intensity and colour can't be negative")
-    return LIGHT.pack(
-        attach, 1 if light.castShadows else 0, a,
-        *position, *light.color, light.radius, light.intensity,
-    )
-
-
-def _hudColor(color, what):
-    color = _rgba(color)
-    _finite(color, what)
-    if min(color) < 0.0 or color[3] > 1.0:
-        raise WireError(-5, "%s %r: the engine takes no negative part and alpha up to 1" % (what, color))
-    return color
-
-
-def _checkCounts(shapes=0, lights=(), anchors=0):
-    if shapes > MAX_SHAPES:
-        raise WireError(-6, "%d shapes; the relay takes %d" % (shapes, MAX_SHAPES))
-    if anchors > MAX_ANCHORS:
-        raise WireError(-6, "%d pieces; the relay takes %d" % (anchors, MAX_ANCHORS))
-    if len(lights) > MAX_LIGHTS:
-        raise WireError(-6, "%d lights; the relay takes %d" % (len(lights), MAX_LIGHTS))
-    if sum(1 for light in lights if light.castShadows) > MAX_SHADOWED_LIGHTS:
-        raise WireError(-6, "over %d shadow-casting lights" % MAX_SHADOWED_LIGHTS)
-
-
-def _worldShapes(shapes):
-    """The shapes' records for BOARD in one pass, the relay's checks made on
-    all of them at once (a board is a few thousand shapes, encoded whenever
-    the game builds its scene); None when one fails, or has a 3-part colour,
-    so _shape() finds it and says what is wrong."""
-    places = [v for s in shapes for v in (*s.position, *s.scale)]
-    colors = [v for s in shapes for v in s.color]
-    if len(colors) != 4 * len(shapes):
-        return None
-    # sum() is NaN or infinite when any value is
-    if places and not (max(map(abs, places)) <= MAX_COORDINATE and math.isfinite(sum(places))):
-        return None
-    if colors and not (max(map(abs, colors)) <= _FLOAT_MAX and math.isfinite(sum(colors))):
-        return None
-    pack = SHAPE.pack
-    try:
-        return [pack(s.kind, WORLD, 0, 0, 0, *s.position, *s.scale, *s.color) for s in shapes]
-    except struct.error:
-        return None
-
-
-def encodeBoard(shapes, lights=()):
-    """BOARD: world shapes and lights."""
-    _checkCounts(len(shapes), lights)
-    out = [header(BOARD), COUNTS.pack(len(shapes), len(lights))]
-    fast = _worldShapes(shapes)
-    out += fast if fast is not None else [
-        _shape(s.kind, WORLD, 0, 0, s.position, s.scale, s.color) for s in shapes]
-    out += [_light(WORLD, 0, light) for light in lights]
-    return b"".join(out)
-
-
-def _labelText(text):
-    # a lone surrogate (text read from a file name, say) is sent as "?", which
-    # is what Strata draws for any character outside its font anyway
-    data = str(text).replace("\0", "").encode("utf-8", "replace")
-    if len(data) > 65535:
-        data = data[:65535].decode("utf-8", "ignore").encode("utf-8")
-    return data
-
-
-def encodeHud(labels=(), panels=()):
-    """HUD: screen panels (drawn first) and labels, in CSS pixels."""
-    if len(panels) > MAX_HUD_ITEMS or len(labels) > MAX_HUD_ITEMS:
-        raise WireError(-6, "%d panels and %d labels; the relay takes %d of each"
-                        % (len(panels), len(labels), MAX_HUD_ITEMS))
-    out = [header(HUD), COUNTS.pack(len(panels), len(labels))]
-    for p in panels:
-        _finite((p.x, p.y, p.width, p.height), "a panel")
-        out.append(PANEL.pack(p.x, p.y, p.width, p.height, *_hudColor(p.color, "a panel's colour")))
-    for label in labels:
-        text = _labelText(label.text)
-        _finite((label.x, label.y, label.pixelSize), "a label")
-        out.append(LABEL.pack(label.x, label.y, label.pixelSize, *_hudColor(label.color, "a label's colour"),
-                              len(text), 0))
-        out.append(text + b"\0" * (-len(text) % 4))
-    return b"".join(out)
-
-
-def encodeView(camera, clearColor=CLEAR_COLOR, sun=SUN_DIRECTION, near=NEAR_PLANE, far=FAR_PLANE):
-    """VIEW: the camera, clear colour and direction to the sun."""
-    _within(camera.eye, "the camera's eye")
-    _within(camera.target, "the camera's target")
-    _finite(tuple(_rgba(clearColor)) + tuple(sun), "the view")
-    if tuple(camera.eye) == tuple(camera.target):
-        raise WireError(-5, "the camera's eye is on its target")
-    if not (0.0 < camera.fovDegrees < 180.0 and 0.0 < near < far <= _FLOAT_MAX):
-        raise WireError(-5, "the view needs 0 < fov < 180 and 0 < near < far")
-    return header(VIEW) + VIEW_BODY.pack(
-        *camera.eye, *camera.target, camera.fovDegrees, near, far, *_rgba(clearColor), *sun
-    )
-
-
-def encodePieces(board, pieces, tracks, tickSeconds):
-    """PIECES for this tick. `tracks` maps a piece id to ((x0, z0), (x1, z1)),
-    from an Animator; a piece without one stands still on its cell. With a
-    viewport, only the pieces in it are sent."""
-    pieces = [p for p in pieces if board.visible(p.column, p.row)]
-    _checkCounts(anchors=len(pieces))
-    index = {}
-    anchors, shapes, lights = [], [], []
-    for i, piece in enumerate(pieces):
-        end = board.cellCenter(piece.column, piece.row)
-        start, end = tracks.get(piece.id, (end, end))
-        index[piece.id] = i
-        _within(tuple(start) + tuple(end), "piece %r's slide" % (piece.id,))
-        anchors.append(ANCHOR.pack(start[0], start[1], end[0], end[1]))
-        # The piece's own shapes and glow, drawn at its end cell and sent as
-        # offsets from it. A lone piece has no bridges; they come below.
-        alone, glow = board.pieceShapes([piece], positions={piece.id: end})
-        for s in alone:
-            x, y, z = s.position
-            shapes.append(_shape(s.kind, PIECE, i, 0, (x - end[0], y, z - end[1]), s.scale, s.color))
-        lights += [_light(PIECE, i, light, end) for light in glow]
-    # Chain bridges, in pieceShapes' order. Each is drawn with both ends at
-    # the origin, which gives its size across; the relay spans the anchors.
-    for a, b in board.bridgePairs(pieces):
-        s = board.bridgeShape(a, b, (0.0, 0.0), (0.0, 0.0))
-        shapes.append(_shape(s.kind, BRIDGE, index[a.id], index[b.id], s.position, s.scale, s.color))
-    if len(shapes) > MAX_SHAPES or len(lights) > MAX_LIGHTS:
-        raise WireError(-6, "%d piece shapes and %d piece lights; the relay takes %d and %d"
-                        % (len(shapes), len(lights), MAX_SHAPES, MAX_LIGHTS))
-    if not (0.0 <= tickSeconds <= _FLOAT_MAX):
-        raise WireError(-5, "tickSeconds is %r" % (tickSeconds,))
-    head = header(PIECES) + PIECES_HEAD.pack(tickSeconds, len(anchors), len(shapes), len(lights))
-    return head + b"".join(anchors) + b"".join(shapes) + b"".join(lights)
-
-
-def readHeader(message):
-    """(major, minor, kind) of a message, or WireError as the relay would
-    refuse it: not a relay message, another major version, truncated."""
-    if len(message) < 2 or bytes(message[:2]) != MAGIC:
-        raise WireError(-1)
-    if len(message) < 3:
-        raise WireError(-3, "no version")
-    if message[2] != WIRE_MAJOR:
-        major = message[2]
-        minor = message[3] if len(message) > 3 else 0
-        raise WireError(-2, "wire format %d.%d; this reads %d.x" % (major, minor, WIRE_MAJOR))
-    if len(message) < HEADER.size:
-        raise WireError(-3, "header")
-    _, major, minor, kind, _, _ = HEADER.unpack_from(message)
-    if kind not in KINDS:
-        raise WireError(-4, "kind %d" % kind)
-    return major, minor, kind
-
-
-def decode(message):
-    """A message read back as (kind, contents): for tests and tools, with
-    the relay's checks (version, kind, counts against the length). A minor
-    version above 0 may carry fields after the ones 1.0 knows; they are
-    ignored, as the relay ignores them."""
-    _, _, kind = readHeader(message)
-    body = memoryview(message)[HEADER.size:]
-
-    def take(fmt, offset, count=1):
-        end = offset + fmt.size * count
-        if end > len(body):
-            raise WireError(-3, "kind %d" % kind)
-        return [fmt.unpack_from(body, offset + fmt.size * i) for i in range(count)], end
-
-    def shape(r):
-        return {"kind": r[0], "attach": r[1], "a": r[2], "b": r[3],
-                "position": r[5:8], "scale": r[8:11], "color": r[11:15]}
-
-    def light(r):
-        return {"attach": r[0], "castShadows": bool(r[1] & 1), "a": r[2],
-                "position": r[3:6], "color": r[6:9], "radius": r[9], "intensity": r[10]}
-
-    if kind == BOARD:
-        (counts,), at = take(COUNTS, 0)
-        shapes, at = take(SHAPE, at, counts[0])
-        lights, at = take(LIGHT, at, counts[1])
-        return kind, {"shapes": [shape(r) for r in shapes], "lights": [light(r) for r in lights]}
-    if kind == PIECES:
-        (head,), at = take(PIECES_HEAD, 0)
-        anchors, at = take(ANCHOR, at, head[1])
-        shapes, at = take(SHAPE, at, head[2])
-        lights, at = take(LIGHT, at, head[3])
-        return kind, {"tickSeconds": head[0], "anchors": [tuple(a) for a in anchors],
-                      "shapes": [shape(r) for r in shapes], "lights": [light(r) for r in lights]}
-    if kind == HUD:
-        (counts,), at = take(COUNTS, 0)
-        panels, at = take(PANEL, at, counts[0])
-        labels = []
-        for _ in range(counts[1]):
-            (r,), at = take(LABEL, at)
-            length = r[7]
-            if at + length > len(body):
-                raise WireError(-3, "label text")
-            text = bytes(body[at:at + length]).decode("utf-8")
-            at += length + (-length % 4)
-            labels.append({"x": r[0], "y": r[1], "pixelSize": r[2], "color": r[3:7], "text": text})
-        return kind, {"panels": [{"rect": p[:4], "color": p[4:8]} for p in panels], "labels": labels}
-    (r,), _ = take(VIEW_BODY, 0)
-    return kind, {"eye": r[0:3], "target": r[3:6], "fovDegrees": r[6], "near": r[7], "far": r[8],
-                  "clearColor": r[9:13], "sun": r[13:16]}
-
-
-# -- transports
-
-
-class PlatformRelay:
-    """The page's window.StrataGridRelay, through pygbag's platform.window."""
-
-    def __init__(self, relay=None):
-        if relay is None:
-            relay = pageObject("StrataGridRelay")
-            if relay is None:
-                raise Unavailable(
-                    "this page has no 3D view (grid-relay.js isn't loaded; on graphik's "
-                    "template it loads once the 3D toggle is on, when wants3D() turns true)"
-                )
-        self.js = relay
-
-    def request(self, options):
-        return str(self.js.request(json.dumps(options)))
-
-    def state(self):
-        return str(self.js.state())
-
-    def send(self, message):
-        return int(self.js.send(base64.b64encode(message).decode("ascii")))
-
-    def poll(self):
-        return json.loads(str(self.js.poll()))
-
-    def reducedMotion(self):
-        return bool(int(self.js.reducedMotion()))
-
-    def close(self):
-        self.js.close()
-
-
-class RecordingRelay:
-    """A relay that keeps what it is sent: for tests, and for recording a
-    game to play into the relay's test page (index.html?wire=...)."""
-
-    def __init__(self, reducedMotion=False, state="ready"):
-        self.messages, self.events, self.motion = [], [], reducedMotion
-        self.status = state
-        self.closed = False
-
-    def request(self, options):
-        self.options = options
-        return self.status
-
-    def state(self):
-        return self.status
-
-    def send(self, message):
-        try:
-            readHeader(message)
-        except WireError as error:
-            return error.status
-        self.messages.append(bytes(message))
-        return 0
-
-    def poll(self):
-        events, self.events = self.events, []
-        return events
-
-    def reducedMotion(self):
-        return self.motion
-
-    def close(self):
-        self.closed = True
-
-    def wireJson(self):
-        return json.dumps([base64.b64encode(m).decode("ascii") for m in self.messages])
+# The page's JS objects (a PageObjects port): window.<name> under pygbag.
+PAGE = PygbagPageObjects()
 
 
 def pageObject(name):
     """window.<name> under pygbag, or None (not in a browser, or no such
     object on the page)."""
-    if sys.platform != "emscripten":
-        return None
-    import platform  # pygbag's, not the standard library's
-
-    return getattr(platform.window, name, None)
+    return PAGE.get(name)
 
 
 def wants3D():
@@ -545,23 +236,7 @@ def set3D(on, reason=""):
 # -- the view
 
 
-class Event:
-    """A Strata-style event (the fields of strata.h's StrataEvent, plus the
-    web's pointer, id, nx, ny for touch and the browser's key)."""
-
-    __slots__ = ("type", "scancode", "modifiers", "repeat", "button", "width", "height",
-                 "x", "y", "dx", "dy", "text", "pointer", "id", "nx", "ny", "key", "pressure")
-
-    def __init__(self, d):
-        for name in self.__slots__:
-            setattr(self, name, d.get(name, "" if name in ("text", "pointer", "key") else 0))
-
-    def __repr__(self):
-        return "Event(%s)" % ", ".join(
-            "%s=%r" % (n, getattr(self, n)) for n in self.__slots__ if getattr(self, n))
-
-
-class Grid3DWebView(ViewGeometry):
+class Grid3DWebView(ViewState):
     """Grid3DView's calls (setBoard, setPieces, setLabels, frame, drawScene,
     pollEvents, resize, close, pickCell), drawn by the page's grid relay."""
 
@@ -569,20 +244,10 @@ class Grid3DWebView(ViewGeometry):
         EVENT_QUIT, EVENT_KEY_DOWN, EVENT_KEY_UP, EVENT_RESIZED)
 
     def __init__(self, relay, width, height, reducedMotion=False, clock=time.monotonic):
-        self.relay = relay
+        ViewState.__init__(self, width, height, reducedMotion=reducedMotion, clock=clock)
+        self.display = RelayDisplay(relay)
         self.strata = EVENTS
-        self.width, self.height = width, height
         self.isWindow = True
-        self.reducedMotion = reducedMotion
-        self.clock = clock
-        self.board = None
-        self.boardTint = None
-        self.boardLights = []
-        self.pieces = []
-        self.labels, self.panels = [], []
-        self.animator = None
-        self.sent = 0
-        self.lastSent = {}  # kind -> the last message of that kind (drawScene)
 
     @classmethod
     def open(cls, width=900, height=700, title="graphik", relay=None, maxBytes=4000000,
@@ -590,7 +255,7 @@ class Grid3DWebView(ViewGeometry):
         """Ask the page for its 3D view (it is downloaded only now, and only
         under maxBytes); raise Unavailable when there is none. `ready` says
         when it has loaded; what is sent before then waits in the page."""
-        relay = relay or PlatformRelay()
+        relay = relay or PlatformRelay(page=PAGE)
         state = relay.request({"canvas": canvas, "maxBytes": maxBytes, "title": title})
         if state.startswith("failed:"):
             raise Unavailable(state[len("failed:"):])
@@ -607,24 +272,30 @@ class Grid3DWebView(ViewGeometry):
         state = self.relay.state()
         return state[len("failed:"):] if state.startswith("failed:") else None
 
+    @property
+    def relay(self):
+        return self.display.relay
+
+    @property
+    def sent(self):
+        """How many messages the relay has taken."""
+        return self.display.sent
+
+    @property
+    def lastSent(self):
+        """kind -> the last message of that kind sent (drawScene's check)."""
+        return self.display.lastSent
+
     def _send(self, message, kind=None):
-        rc = self.relay.send(message)
-        if rc < 0:
-            raise WireError(rc, "the grid relay refused a message")
-        self.sent += 1
-        if kind is not None:
-            self.lastSent[kind] = message
+        self.display.send(message, kind)
 
     # -- what to draw (as Grid3DView)
 
     def setBoard(self, board, tint=None, lights=()):
         """The static part: call when the board, its theme or its tint changes."""
-        self.board = board
-        self.boardTint = tint
-        self.boardLights = list(lights)
+        self.placeBoard(board, tint, lights)
         checkLights(self.boardLights)
-        self.animator = Animator(board.cellCenter, reducedMotion=self.reducedMotion)
-        self.animator.update(self.pieces, self.clock(), 0.0)
+        self.restartAnimator()
         message = encodeBoard(board.boardShapes(tint), self.boardLights)
         if self.lastSent.get(BOARD) != message:  # the relay has it already
             self._send(message, BOARD)
@@ -633,32 +304,17 @@ class Grid3DWebView(ViewGeometry):
 
     def setPieces(self, pieces, tickSeconds=0.0, snap=False):
         """The dynamic part: call once per game tick (see Grid3DView)."""
-        if self.board is None:
-            raise RuntimeError("setBoard() must come before setPieces()")
-        pieces = list(pieces)
-        self.board.checkPieces(pieces)
+        pieces = self.checkedPieces(pieces)
         _, lights = self.board.pieceShapes(pieces)
         checkLights(self.boardLights + lights)
-        self.pieces = pieces
-        self.animator.update(pieces, self.clock(), tickSeconds, snap=snap)
+        self.movePieces(pieces, tickSeconds, snap)
         tick = 0.0 if snap else self.animator.tickSeconds
         self._send(encodePieces(self.board, pieces, self.animator.tracks, tick), PIECES)
 
     def setLabels(self, labels=(), panels=()):
         """Screen text and the panels behind it."""
-        self.labels, self.panels = list(labels), list(panels)
+        self.placeLabels(labels, panels)
         self._send(encodeHud(self.labels, self.panels), HUD)
-
-    def scene(self, now=None):
-        """The Scene a desktop view would draw at `now` (for tests and tools)."""
-        if self.board is None:
-            raise RuntimeError("setBoard() must come before drawing")
-        now = self.clock() if now is None else now
-        top, bottom = self.insetFractions()
-        return self.board.scene(self.pieces, positions=self.animator.positions(now),
-                                labels=self.labels, panels=self.panels, lights=self.boardLights,
-                                aspect=self.width / float(self.height), tint=self.boardTint,
-                                top=top, bottom=bottom)
 
     def frame(self, now=None, present=True):
         """Nothing to do per frame: the relay draws on the page's own frames."""
@@ -669,16 +325,7 @@ class Grid3DWebView(ViewGeometry):
         HUD, its camera as the view; only what changed since the last frame
         is sent."""
         scene.checkLimits()
-        messages = [
-            (BOARD, encodeBoard(scene.shapes, scene.lights)),
-            (PIECES, encodePieces(_NO_BOARD, (), {}, 0.0)),
-            (HUD, encodeHud(scene.labels, scene.panels)),
-        ]
-        if scene.camera is not None:
-            messages.append((VIEW, encodeView(scene.camera, scene.clearColor)))
-        for kind, message in messages:
-            if self.lastSent.get(kind) != message:
-                self._send(message, kind)
+        self.display.draw(scene, self.width / float(self.height), present)
 
     def _sendView(self):
         if self.board is not None:
@@ -688,10 +335,11 @@ class Grid3DWebView(ViewGeometry):
 
     def pollEvents(self):
         """Every event since the last poll (Event objects; see EVENTS)."""
-        return [Event(e) for e in self.relay.poll()]
+        return self.display.poll()
 
     def resize(self, width, height):
         self.width, self.height = width, height
+        self.display.resize(width, height)
         self._sendView()
 
     def setInsets(self, top=None, bottom=None):
@@ -702,95 +350,16 @@ class Grid3DWebView(ViewGeometry):
             self._sendView()
         return changed
 
+    def setFullscreen(self, enabled):
+        """As Grid3DView's; always False: the browser owns its window."""
+        return self.display.setFullscreen(enabled)
+
+    def setTitle(self, title):
+        """As Grid3DView's; always False: the page owns its title."""
+        return self.display.setTitle(title)
+
     def savePng(self, path):
-        raise Unavailable("screenshots of the web view are taken by the page (canvas.toBlob)")
+        self.display.savePng(path)
 
     def close(self):
-        self.relay.close()
-
-
-class _NoBoard:
-    # what encodePieces needs to send "no pieces" for drawScene
-    @staticmethod
-    def visible(column, row):
-        return False
-
-    @staticmethod
-    def bridgePairs(pieces):
-        return []
-
-
-_NO_BOARD = _NoBoard()
-
-
-# -- pygame events, so a game's 2D handlers work in 3D
-
-# USB HID usage id -> pygame key name (pygame.key.key_code takes these).
-_KEY_NAMES = {40: "return", 41: "escape", 42: "backspace", 43: "tab", 44: "space", 45: "-", 46: "=",
-              47: "[", 48: "]", 49: "\\", 51: ";", 52: "'", 53: "`", 54: ",", 55: ".", 56: "/",
-              74: "home", 75: "page up", 76: "delete", 77: "end", 78: "page down",
-              79: "right", 80: "left", 81: "down", 82: "up",
-              224: "left ctrl", 225: "left shift", 226: "left alt", 227: "left meta",
-              228: "right ctrl", 229: "right shift", 230: "right alt", 231: "right meta"}
-_KEY_NAMES.update({4 + i: chr(97 + i) for i in range(26)})
-_KEY_NAMES.update({30 + i: str((i + 1) % 10) for i in range(10)})
-_KEY_NAMES.update({58 + i: "f%d" % (i + 1) for i in range(12)})
-# SDL3 modifier bits; pygame's KMOD_* (SDL2's) use the same bits for these.
-_MODS = (0x1, 0x2, 0x40, 0x80, 0x100, 0x200, 0x400, 0x800, 0x1000, 0x2000)
-
-
-def pygameKey(scancode, pygame):
-    """The pygame key constant for a Strata (USB HID) scancode, or 0."""
-    name = _KEY_NAMES.get(scancode)
-    try:
-        return pygame.key.key_code(name) if name else 0
-    except (ValueError, AttributeError):
-        return 0
-
-
-def toPygameEvents(events, pygame, keys=False, pointer=True, fingers=True):
-    """pygame events for relay (or desktop Strata) events: KEYDOWN, KEYUP and
-    TEXTINPUT; MOUSEBUTTONDOWN/UP, MOUSEMOTION and MOUSEWHEEL; FINGERDOWN,
-    FINGERUP and FINGERMOTION (a cancelled finger is a FINGERUP); and
-    VIDEORESIZE. Keys are off by default: under pygbag, pygame's own SDL
-    already gets them (it listens on the whole page), so posting them too
-    would double every key. The pointer is on: the relay's canvas covers
-    pygame's, so its mouse and touch never reach SDL."""
-    out = []
-    for e in events:
-        t = e.type
-        kind = getattr(e, "pointer", "") or ""
-        if keys and t in (EVENT_KEY_DOWN, EVENT_KEY_UP):
-            mod = 0
-            for bit in _MODS:
-                if getattr(e, "modifiers", 0) & bit:
-                    mod |= bit
-            key = getattr(e, "key", "") or ""
-            out.append(pygame.event.Event(
-                pygame.KEYDOWN if t == EVENT_KEY_DOWN else pygame.KEYUP,
-                key=pygameKey(e.scancode, pygame), scancode=e.scancode, mod=mod,
-                unicode=key if len(key) == 1 else ""))
-        elif keys and t == EVENT_TEXT_INPUT:
-            out.append(pygame.event.Event(pygame.TEXTINPUT, text=e.text))
-        elif pointer and t in (EVENT_MOUSE_BUTTON_DOWN, EVENT_MOUSE_BUTTON_UP):
-            out.append(pygame.event.Event(
-                pygame.MOUSEBUTTONDOWN if t == EVENT_MOUSE_BUTTON_DOWN else pygame.MOUSEBUTTONUP,
-                pos=(int(e.x), int(e.y)), button=e.button, touch=kind == "touch"))
-        elif pointer and t == EVENT_MOUSE_MOTION:
-            out.append(pygame.event.Event(
-                pygame.MOUSEMOTION, pos=(int(e.x), int(e.y)),
-                rel=(int(getattr(e, "dx", 0)), int(getattr(e, "dy", 0))),
-                buttons=(0, 0, 0), touch=kind == "touch"))
-        elif pointer and t == EVENT_MOUSE_WHEEL:
-            out.append(pygame.event.Event(pygame.MOUSEWHEEL, x=e.x, y=e.y, flipped=False))
-        elif fingers and t in (EVENT_FINGER_DOWN, EVENT_FINGER_UP, EVENT_FINGER_MOTION,
-                               EVENT_FINGER_CANCELED):
-            fingerKind = {EVENT_FINGER_DOWN: pygame.FINGERDOWN,
-                          EVENT_FINGER_MOTION: pygame.FINGERMOTION}.get(t, pygame.FINGERUP)
-            out.append(pygame.event.Event(
-                fingerKind, x=e.nx, y=e.ny, dx=getattr(e, "dx", 0), dy=getattr(e, "dy", 0),
-                finger_id=e.id, touch_id=0, pressure=getattr(e, "pressure", 0) or 1.0))
-        elif t == EVENT_RESIZED:
-            out.append(pygame.event.Event(pygame.VIDEORESIZE, size=(e.width, e.height),
-                                          w=e.width, h=e.height))
-    return out
+        self.display.close()
