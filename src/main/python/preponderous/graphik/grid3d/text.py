@@ -16,7 +16,8 @@ __all__ = ["measureText", "fitText", "wrapText", "centredLabel"]
 def measureText(text, pixelSize):
     """How wide `text` is drawn at `pixelSize`, in pixels: its longest line's
     characters times pixelSize."""
-    return max(len(line) for line in str(text).split("\n")) * pixelSize
+    # a NUL draws nothing: both backends drop it (view.labelBytes, web._labelText)
+    return max(len(line) for line in str(text).replace("\0", "").split("\n")) * pixelSize
 
 
 def wrapText(text, maxWidth, pixelSize):

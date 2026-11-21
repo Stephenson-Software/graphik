@@ -39,6 +39,13 @@ STRATA_PLATFORMS = ("linux", "win32")
 INSTALL_HINT = "pip install 'graphik[strata]'"
 
 
+def labelBytes(text):
+    """A label's text as Strata takes it: UTF-8 with no NUL (a C string would
+    end there; the browser backend drops them too), a lone surrogate as '?'
+    (what Strata draws for any character outside its font)."""
+    return str(text).replace("\0", "").encode("utf-8", "replace")
+
+
 class Unavailable(Exception):
     """The 3D view can't run here. The message says why, in plain words."""
 
@@ -257,8 +264,7 @@ class Grid3DView(ViewGeometry):
         if scene.labels:
             engine.submit_text(
                 [
-                    s.Text(l.x, l.y, l.pixelSize, s.TEXT_SHADOW, l.color,
-                           l.text.encode("utf-8"))
+                    s.Text(l.x, l.y, l.pixelSize, s.TEXT_SHADOW, l.color, labelBytes(l.text))
                     for l in scene.labels
                 ]
             )
