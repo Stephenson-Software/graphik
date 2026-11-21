@@ -25,6 +25,12 @@ Usage, once per game:
 
 The board and labels are kept between frames; pieces slide between their
 cells over one tick (see animate.Animator).
+
+This module is the desktop view's composition root: Grid3DView keeps what
+it shows in a ViewState (state.py) and draws through its ports (ports/),
+on the StrataEngine that STRATA_LOADER (BindingStrataLoader) opens. The
+binding's own names (loadStrata, STRATA_VERSION, renderItems, labelBytes)
+live in adapters/ and are re-exported here.
 """
 
 import sys
@@ -41,6 +47,10 @@ from .adapters.strata_engine import _RENDER_ITEM, StrataEngine, labelBytes, rend
 from .errors import Unavailable
 from .geometry import FAR_PLANE, NEAR_PLANE, SUN_DIRECTION, ViewGeometry  # noqa: F401
 from .state import ViewState
+
+# The composition root's default for open() on the desktop (a StrataLoader,
+# ports/strata_loader.py): the strata-engine binding. Read at each open().
+STRATA_LOADER = BindingStrataLoader()
 
 class Grid3DView(ViewState):
     """One Strata engine (a window, or headless for screenshots and tests)."""
@@ -84,7 +94,7 @@ class Grid3DView(ViewState):
 
             return Grid3DWebView.open(width, height, title,
                                       reducedMotion=reducedMotion or None, clock=clock)
-        display = BindingStrataLoader().open(width, height, title, headless)
+        display = STRATA_LOADER.open(width, height, title, headless)
         return cls.using(display, width, height, not headless,
                          reducedMotion=reducedMotion, clock=clock)
 

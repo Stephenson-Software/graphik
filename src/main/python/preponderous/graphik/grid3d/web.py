@@ -39,6 +39,13 @@ buttonArea() says where, so a game's HUD can stay out from under it, and
 touchScreen() whether the page is on a touch screen, where a game shows its
 on-screen keys (touchkeys.py).
 
+This module is the browser view's composition root: Grid3DWebView keeps
+what it shows in a ViewState (state.py) and draws on a RelayDisplay over a
+GridRelay (PlatformRelay by default); the page helpers read the page
+through PAGE (a PageObjects). The wire format (wire.py), the events
+(events.py) and the relays (adapters/) are re-exported here under their
+old names.
+
 Pure Python (struct, base64, json); pygbag's `platform` only in a browser.
 """
 import os

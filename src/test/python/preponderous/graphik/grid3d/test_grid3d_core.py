@@ -95,3 +95,20 @@ def test_the_web_view_asks_its_page_for_the_relay(monkeypatch):
     monkeypatch.setattr(web, "PAGE", FakePage())
     with pytest.raises(Unavailable, match="no 3D view"):
         web.Grid3DWebView.open()
+
+
+def test_open_on_the_desktop_uses_the_composition_roots_loader(monkeypatch):
+    from preponderous.graphik.grid3d import view as viewModule
+    from test_grid3d_ports import FakeStrataLoader
+
+    display = FakeDisplay()
+    display.strata = EVENT_NAMES
+    loader = FakeStrataLoader(display)
+    monkeypatch.setattr(viewModule.sys, "platform", "linux")
+    monkeypatch.setattr(viewModule, "STRATA_LOADER", loader)
+    view = Grid3DView.open(320, 200, "Game", headless=True, clock=lambda: 1.0)
+    assert loader.opened == [(320, 200, "Game", True)]
+    assert view.display is display and not view.isWindow and view.clock() == 1.0
+    monkeypatch.setattr(viewModule, "STRATA_LOADER", FakeStrataLoader(reason="no GPU here"))
+    with pytest.raises(Unavailable, match="no GPU here"):
+        Grid3DView.open(320, 200)
