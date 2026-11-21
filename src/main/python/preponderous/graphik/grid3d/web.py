@@ -41,12 +41,15 @@ on-screen keys (touchkeys.py).
 
 Pure Python (struct, base64, json); pygbag's `platform` only in a browser.
 """
-import base64
-import json
 import os
 import sys
 import tempfile
 import time
+
+from .adapters.platform_relay import PlatformRelay
+from .adapters.pygbag_page_objects import PygbagPageObjects
+from .adapters.recording_relay import RecordingRelay
+from .adapters.relay_display import RelayDisplay
 
 from .events import (  # noqa: F401  (re-exported: grid3d.web's public names)
     EVENT_FINGER_CANCELED,
@@ -151,87 +154,13 @@ def templatePath(defaultView="3d"):
         handle.write(page)
     return path
 
-# -- transports
-
-
-class PlatformRelay:
-    """The page's window.StrataGridRelay, through pygbag's platform.window."""
-
-    def __init__(self, relay=None):
-        if relay is None:
-            relay = pageObject("StrataGridRelay")
-            if relay is None:
-                raise Unavailable(
-                    "this page has no 3D view (grid-relay.js isn't loaded; on graphik's "
-                    "template it loads once the 3D toggle is on, when wants3D() turns true)"
-                )
-        self.js = relay
-
-    def request(self, options):
-        return str(self.js.request(json.dumps(options)))
-
-    def state(self):
-        return str(self.js.state())
-
-    def send(self, message):
-        return int(self.js.send(base64.b64encode(message).decode("ascii")))
-
-    def poll(self):
-        return json.loads(str(self.js.poll()))
-
-    def reducedMotion(self):
-        return bool(int(self.js.reducedMotion()))
-
-    def close(self):
-        self.js.close()
-
-
-class RecordingRelay:
-    """A relay that keeps what it is sent: for tests, and for recording a
-    game to play into the relay's test page (index.html?wire=...)."""
-
-    def __init__(self, reducedMotion=False, state="ready"):
-        self.messages, self.events, self.motion = [], [], reducedMotion
-        self.status = state
-        self.closed = False
-
-    def request(self, options):
-        self.options = options
-        return self.status
-
-    def state(self):
-        return self.status
-
-    def send(self, message):
-        try:
-            readHeader(message)
-        except WireError as error:
-            return error.status
-        self.messages.append(bytes(message))
-        return 0
-
-    def poll(self):
-        events, self.events = self.events, []
-        return events
-
-    def reducedMotion(self):
-        return self.motion
-
-    def close(self):
-        self.closed = True
-
-    def wireJson(self):
-        return json.dumps([base64.b64encode(m).decode("ascii") for m in self.messages])
+# -- transports: adapters/platform_relay.py and adapters/recording_relay.py
 
 
 def pageObject(name):
     """window.<name> under pygbag, or None (not in a browser, or no such
     object on the page)."""
-    if sys.platform != "emscripten":
-        return None
-    import platform  # pygbag's, not the standard library's
-
-    return getattr(platform.window, name, None)
+    return PygbagPageObjects().get(name)
 
 
 def wants3D():
@@ -304,11 +233,9 @@ class Grid3DWebView(ViewState):
 
     def __init__(self, relay, width, height, reducedMotion=False, clock=time.monotonic):
         ViewState.__init__(self, width, height, reducedMotion=reducedMotion, clock=clock)
-        self.relay = relay
+        self.display = RelayDisplay(relay)
         self.strata = EVENTS
         self.isWindow = True
-        self.sent = 0
-        self.lastSent = {}  # kind -> the last message of that kind (drawScene)
 
     @classmethod
     def open(cls, width=900, height=700, title="graphik", relay=None, maxBytes=4000000,
@@ -333,13 +260,22 @@ class Grid3DWebView(ViewState):
         state = self.relay.state()
         return state[len("failed:"):] if state.startswith("failed:") else None
 
+    @property
+    def relay(self):
+        return self.display.relay
+
+    @property
+    def sent(self):
+        """How many messages the relay has taken."""
+        return self.display.sent
+
+    @property
+    def lastSent(self):
+        """kind -> the last message of that kind sent (drawScene's check)."""
+        return self.display.lastSent
+
     def _send(self, message, kind=None):
-        rc = self.relay.send(message)
-        if rc < 0:
-            raise WireError(rc, "the grid relay refused a message")
-        self.sent += 1
-        if kind is not None:
-            self.lastSent[kind] = message
+        self.display.send(message, kind)
 
     # -- what to draw (as Grid3DView)
 
@@ -377,16 +313,7 @@ class Grid3DWebView(ViewState):
         HUD, its camera as the view; only what changed since the last frame
         is sent."""
         scene.checkLimits()
-        messages = [
-            (BOARD, encodeBoard(scene.shapes, scene.lights)),
-            (PIECES, encodePieces(_NO_BOARD, (), {}, 0.0)),
-            (HUD, encodeHud(scene.labels, scene.panels)),
-        ]
-        if scene.camera is not None:
-            messages.append((VIEW, encodeView(scene.camera, scene.clearColor)))
-        for kind, message in messages:
-            if self.lastSent.get(kind) != message:
-                self._send(message, kind)
+        self.display.draw(scene, self.width / float(self.height), present)
 
     def _sendView(self):
         if self.board is not None:
@@ -396,10 +323,11 @@ class Grid3DWebView(ViewState):
 
     def pollEvents(self):
         """Every event since the last poll (Event objects; see EVENTS)."""
-        return [Event(e) for e in self.relay.poll()]
+        return self.display.poll()
 
     def resize(self, width, height):
         self.width, self.height = width, height
+        self.display.resize(width, height)
         self._sendView()
 
     def setInsets(self, top=None, bottom=None):
@@ -411,22 +339,7 @@ class Grid3DWebView(ViewState):
         return changed
 
     def savePng(self, path):
-        raise Unavailable("screenshots of the web view are taken by the page (canvas.toBlob)")
+        self.display.savePng(path)
 
     def close(self):
-        self.relay.close()
-
-
-class _NoBoard:
-    # what encodePieces needs to send "no pieces" for drawScene
-    @staticmethod
-    def visible(column, row):
-        return False
-
-    @staticmethod
-    def bridgePairs(pieces):
-        return []
-
-
-_NO_BOARD = _NoBoard()
-
+        self.display.close()

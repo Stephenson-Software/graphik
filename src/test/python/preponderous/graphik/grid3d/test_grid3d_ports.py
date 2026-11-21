@@ -83,8 +83,9 @@ class FakePage:
 
 
 def adapters():
-    # the adapters arrive in the next step; until then their cases skip
-    return pytest.importorskip("preponderous.graphik.grid3d.adapters")
+    from preponderous.graphik.grid3d import adapters as module
+
+    return module
 
 
 @pytest.fixture
