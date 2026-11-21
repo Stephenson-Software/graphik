@@ -11,7 +11,7 @@ This library assists developers with graphics programming.
 graphik is released as git tags, not on PyPI. Install a release from its tag's
 archive (no `git` needed):
 ```bash
-pip install "graphik @ https://github.com/Stephenson-Software/graphik/archive/refs/tags/v0.5.2.zip"
+pip install "graphik @ https://github.com/Stephenson-Software/graphik/archive/refs/tags/v0.5.3.zip"
 ```
 In a `requirements.txt`, use the same line without the quotes. See
 [RELEASING.md](RELEASING.md) for how releases are cut.
@@ -95,7 +95,7 @@ and runs on Linux and Windows desktops, and in the browser under pygbag
 (see [In the browser](#in-the-browser)):
 
 ```bash
-pip install "graphik[strata] @ https://github.com/Stephenson-Software/graphik/archive/refs/tags/v0.5.2.zip"
+pip install "graphik[strata] @ https://github.com/Stephenson-Software/graphik/archive/refs/tags/v0.5.3.zip"
 ```
 
 ```python
