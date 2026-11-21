@@ -44,6 +44,7 @@ Pure Python (struct, base64, json); pygbag's `platform` only in a browser.
 
 import base64
 import json
+import math
 import os
 import struct
 import sys
@@ -221,11 +222,34 @@ def _checkCounts(shapes=0, lights=(), anchors=0):
         raise WireError(-6, "over %d shadow-casting lights" % MAX_SHADOWED_LIGHTS)
 
 
+def _worldShapes(shapes):
+    """The shapes' records for BOARD in one pass, the relay's checks made on
+    all of them at once (a board is a few thousand shapes, encoded whenever
+    the game builds its scene); None when one fails, or has a 3-part colour,
+    so _shape() finds it and says what is wrong."""
+    places = [v for s in shapes for v in (*s.position, *s.scale)]
+    colors = [v for s in shapes for v in s.color]
+    if len(colors) != 4 * len(shapes):
+        return None
+    # sum() is NaN or infinite when any value is
+    if places and not (max(map(abs, places)) <= MAX_COORDINATE and math.isfinite(sum(places))):
+        return None
+    if colors and not (max(map(abs, colors)) <= _FLOAT_MAX and math.isfinite(sum(colors))):
+        return None
+    pack = SHAPE.pack
+    try:
+        return [pack(s.kind, WORLD, 0, 0, 0, *s.position, *s.scale, *s.color) for s in shapes]
+    except struct.error:
+        return None
+
+
 def encodeBoard(shapes, lights=()):
     """BOARD: world shapes and lights."""
     _checkCounts(len(shapes), lights)
     out = [header(BOARD), COUNTS.pack(len(shapes), len(lights))]
-    out += [_shape(s.kind, WORLD, 0, 0, s.position, s.scale, s.color) for s in shapes]
+    fast = _worldShapes(shapes)
+    out += fast if fast is not None else [
+        _shape(s.kind, WORLD, 0, 0, s.position, s.scale, s.color) for s in shapes]
     out += [_light(WORLD, 0, light) for light in lights]
     return b"".join(out)
 
@@ -601,7 +625,9 @@ class Grid3DWebView(ViewGeometry):
         checkLights(self.boardLights)
         self.animator = Animator(board.cellCenter, reducedMotion=self.reducedMotion)
         self.animator.update(self.pieces, self.clock(), 0.0)
-        self._send(encodeBoard(board.boardShapes(tint), self.boardLights), BOARD)
+        message = encodeBoard(board.boardShapes(tint), self.boardLights)
+        if self.lastSent.get(BOARD) != message:  # the relay has it already
+            self._send(message, BOARD)
         self._sendView()
         self._send(encodePieces(board, self.pieces, self.animator.tracks, 0.0), PIECES)
 
