@@ -33,8 +33,9 @@ import struct
 import sys
 import time
 
-from .animate import Animator
-from .pick import cellScreenPosition, pickCell, projectToScreen
+from .errors import Unavailable
+from .geometry import FAR_PLANE, NEAR_PLANE, SUN_DIRECTION, ViewGeometry  # noqa: F401
+from .state import ViewState
 
 STRATA_VERSION = "0.8.0"
 STRATA_PLATFORMS = ("linux", "win32")
@@ -74,10 +75,6 @@ def labelBytes(text):
     return str(text).replace("\0", "").encode("utf-8", "replace")
 
 
-class Unavailable(Exception):
-    """The 3D view can't run here. The message says why, in plain words."""
-
-
 def loadStrata(platform=None):
     """Import the binding and load libstrata; raise Unavailable if either fails."""
     platform = sys.platform if platform is None else platform
@@ -100,73 +97,14 @@ def loadStrata(platform=None):
         raise Unavailable("the Strata library couldn't be loaded: %s" % error)
 
 
-class ViewGeometry:
-    """Where things are on screen, for a view with `board`, `width` and
-    `height` (Grid3DView and Grid3DWebView)."""
-
-    # pixels at the top and bottom of the window kept clear of the board
-    # (setInsets); None for fitCamera's own framing
-    insets = None
-
-    def setInsets(self, top=None, bottom=None):
-        """Keeps `top` pixels at the top of the window (a HUD) and `bottom`
-        at the bottom (a bar of touch keys) clear of the board: the camera
-        fits the board in the space between. None for both (the default)
-        frames the board as fitCamera does for the window's shape. Returns
-        whether anything changed."""
-        insets = None if top is None and bottom is None else (top or 0, bottom or 0)
-        if insets == self.insets:
-            return False
-        self.insets = insets
-        return True
-
-    def insetFractions(self):
-        """(top, bottom) as fractions of the window's height, or (None,
-        None) when no insets are set."""
-        if self.insets is None or not self.height:
-            return None, None
-        top, bottom = self.insets
-        return top / float(self.height), bottom / float(self.height)
-
-    def camera(self):
-        """The camera the current board is drawn with at this window size."""
-        if self.board is None:
-            raise RuntimeError("setBoard() must come before the camera")
-        top, bottom = self.insetFractions()
-        return self.board.camera(self.width / float(self.height), top=top, bottom=bottom)
-
-    def pickCell(self, x, y):
-        """The board (column, row) under window pixel (x, y), or None."""
-        if self.board is None:
-            return None
-        return pickCell(self.camera(), self.board, x, y, self.width, self.height)
-
-    def projectToScreen(self, point):
-        """Where world point (x, y, z) lands in the window, or None."""
-        return projectToScreen(self.camera(), point, self.width, self.height)
-
-    def cellScreenPosition(self, column, row, y=0.0):
-        """Where the middle of a cell, `y` above the bed, lands in the window."""
-        return cellScreenPosition(self.camera(), self.board, column, row,
-                                  self.width, self.height, y)
-
-
-class Grid3DView(ViewGeometry):
+class Grid3DView(ViewState):
     """One Strata engine (a window, or headless for screenshots and tests)."""
 
     def __init__(self, strata, lib, engine, width, height, isWindow,
                  reducedMotion=False, clock=time.monotonic):
+        ViewState.__init__(self, width, height, reducedMotion=reducedMotion, clock=clock)
         self.strata, self.lib, self.engine = strata, lib, engine
-        self.width, self.height = width, height
         self.isWindow = isWindow
-        self.reducedMotion = reducedMotion
-        self.clock = clock
-        self.board = None
-        self.boardTint = None
-        self.boardLights = []
-        self.pieces = []
-        self.labels, self.panels = [], []
-        self.animator = None
         self.EVENT_QUIT = strata.EVENT_QUIT
         self.EVENT_KEY_DOWN = strata.EVENT_KEY_DOWN
         self.EVENT_KEY_UP = strata.EVENT_KEY_UP
@@ -211,43 +149,18 @@ class Grid3DView(ViewGeometry):
 
     def setBoard(self, board, tint=None, lights=()):
         """The static part: call when the board, its theme or its tint changes."""
-        self.board = board
-        self.boardTint = tint
-        self.boardLights = list(lights)
-        self.animator = Animator(board.cellCenter, reducedMotion=self.reducedMotion)
-        self.animator.update(self.pieces, self.clock(), 0.0)
+        self.placeBoard(board, tint, lights)
+        self.restartAnimator()
 
     def setPieces(self, pieces, tickSeconds=0.0, snap=False):
         """The dynamic part: call once per game tick. Pieces slide from where
         they were drawn to their new cells over `tickSeconds`; `snap=True`
         (a restart, a new level) puts them all straight on their cells."""
-        if self.board is None:
-            raise RuntimeError("setBoard() must come before setPieces()")
-        pieces = list(pieces)
-        self.board.checkPieces(pieces)
-        self.pieces = pieces
-        self.animator.update(pieces, self.clock(), tickSeconds, snap=snap)
+        self.movePieces(self.checkedPieces(pieces), tickSeconds, snap)
 
     def setLabels(self, labels=(), panels=()):
         """Screen text and the panels behind it."""
-        self.labels, self.panels = list(labels), list(panels)
-
-    def scene(self, now=None):
-        """The Scene a frame at `now` would draw (for tests and tools)."""
-        if self.board is None:
-            raise RuntimeError("setBoard() must come before drawing")
-        now = self.clock() if now is None else now
-        return self.board.scene(
-            self.pieces,
-            positions=self.animator.positions(now),
-            labels=self.labels,
-            panels=self.panels,
-            lights=self.boardLights,
-            aspect=self.width / float(self.height),
-            tint=self.boardTint,
-            top=self.insetFractions()[0],
-            bottom=self.insetFractions()[1],
-        )
+        self.placeLabels(labels, panels)
 
     def frame(self, now=None, present=True):
         """Draw one frame (pieces at their positions for `now`)."""
