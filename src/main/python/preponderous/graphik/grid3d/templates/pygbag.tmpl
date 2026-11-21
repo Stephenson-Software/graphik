@@ -444,7 +444,10 @@ frameborder="1"
      Starting in 3D, the relay's scripts and engine load at once, alongside
      pygbag. The 2D canvas stays on screen until the 3D view is drawing the
      game, and comes back, with the reason in plain words, whenever 3D can't
-     start (no WebGL 2, a file missing, too big, the engine failed). A page
+     start (no WebGL 2, a file missing, too big, the engine failed), or when
+     the 3D view stays too slow once the game is drawing in it (see
+     watchSpeed() below; that switch is not remembered, and the button
+     brings 3D back). A page
      starting in 2D fetches nothing of the 3D view until the button is
      pressed. The relay's files (grid-relay-scene.js and .wasm,
      strata-loader.js, strata-kit.js, grid-relay.js) go next to this page:
@@ -606,10 +609,93 @@ frameborder="1"
     if (!on) {
       if (relay && relay.state() !== "idle") relay.close();
       fed = false;
+      fedAt = 0;
+      stopWatching();
       show3d(false);
       show2d(true);
     }
     label();
+  }
+  // Too slow: the relay's kit first lowers its pixel density to 1, then its
+  // quality tier to the lowest; Strata's onSlow then calls a
+  // StrataLoader.slow() that does nothing on this page. The page goes back
+  // to 2D, saying why, only when the drawing itself stays slow once the kit
+  // can go no lower: for SLOW_FOR_MS, every SLOW_WINDOW_MS window has its
+  // typical frame (the median time between frames, the page's own
+  // requestAnimationFrame) over SLOW_FRAME_MS, with the relay's own drawing
+  // (its stats' cpuMs a frame) at least DRAW_SHARE of it, and the kit's own
+  // average frame (its stats' frameMs) over SLOW_FRAME_MS too. A game that stops
+  // the page now and then (building and sending a board in Python) makes a
+  // few long gaps between frames, not a slow typical frame, and a game that
+  // is slow every frame is not helped by 2D: neither counts. Counting starts
+  // SLOW_GRACE_MS after the game's first message to the 3D view (pygbag's
+  // boot, the shaders' first compile and the kit's own steps down are not
+  // counted), and stops while the tab is hidden. It is not the player's
+  // choice: it is not remembered, the button brings 3D back, and once the
+  // player has done that the page leaves 3D alone, however slow, until it
+  // is reloaded. ?slow=0 in the address turns this off (for testing on a
+  // machine that draws in software).
+  const SLOW_FRAME_MS = 66, SLOW_FOR_MS = 5000, SLOW_GRACE_MS = 3000, SLOW_WINDOW_MS = 1000;
+  const DRAW_SHARE = 0.25, STALL_MS = 250;
+  let fedAt = 0, slowDropped = false, slowAccepted = false;
+  let slowWindows = 0, windowStart = 0, sampling = false, lastFrameAt = 0, gaps = [];
+  let lastWindow = "";  // the last second's readings, for Graphik3D.speed()
+  try { slowAccepted = new URLSearchParams(window.location.search).get("slow") === "0"; } catch (e) { slowAccepted = false; }
+  function frameStats(relay) {
+    if (typeof relay.stats !== "function") return null;
+    try { return JSON.parse(relay.stats()); } catch (e) { return null; }
+  }
+  function sampleFrame(t) {
+    if (!sampling) return;
+    if (lastFrameAt) gaps.push(t - lastFrameAt);
+    lastFrameAt = t;
+    window.requestAnimationFrame(sampleFrame);
+  }
+  function stopWatching() {
+    sampling = false;
+    lastFrameAt = 0;
+    gaps = [];
+    windowStart = 0;
+    slowWindows = 0;
+  }
+  // One window's verdict: true when the kit is at its lowest and the drawing
+  // slow, false when not, null when the window was nearly all stall (it
+  // neither counts nor starts the count again).
+  function slowWindow(relay) {
+    const s = frameStats(relay);
+    if (!(s && s.quality === 0 && typeof s.dpr === "number" && s.dpr <= 1.01)) return false;
+    const sorted = gaps.slice().sort(function (a, b) { return a - b; });
+    if (!sorted.length) return null;
+    // a stall is a gap far past the window's typical one
+    const cut = Math.max(STALL_MS, 3 * sorted[sorted.length >> 1]);
+    const kept = sorted.filter(function (ms) { return ms <= cut; });
+    if (kept.length < 3) return null;
+    const typical = kept[kept.length >> 1];
+    lastWindow = JSON.stringify({typical: typical, drawMs: Number(s.cpuMs), frames: sorted.length, stalls: sorted.length - kept.length});
+    // the kit's own average (stalls and all) must say slow too: it can only
+    // be lower than a slow typical frame when the frames aren't slow
+    return typical > SLOW_FRAME_MS && Number(s.cpuMs) >= DRAW_SHARE * typical
+        && Number(s.frameMs) > SLOW_FRAME_MS;
+  }
+  function watchSpeed(relay, now) {
+    if (slowAccepted || !fedAt || now - fedAt < SLOW_GRACE_MS || document.hidden
+        || typeof window.requestAnimationFrame !== "function") { stopWatching(); return; }
+    if (!sampling) {
+      sampling = true;
+      window.requestAnimationFrame(sampleFrame);
+    }
+    if (!windowStart || now - windowStart >= SLOW_WINDOW_MS) {
+      const verdict = windowStart ? slowWindow(relay) : null;
+      if (verdict !== null) slowWindows = verdict ? slowWindows + 1 : 0;
+      windowStart = now;
+      gaps = [];
+      if (typeof relay.resetStats === "function") relay.resetStats();
+    }
+    if (slowWindows * SLOW_WINDOW_MS < SLOW_FOR_MS) return;
+    stopWatching();
+    slowDropped = true;
+    set(0);
+    tell("Back to 2D: " + REASONS.slow + ". Press 3D to try it again.");
   }
   // The 2D canvas hides only once the 3D view is drawing the game, and
   // comes back if 3D fails, so there is always a view on screen.
@@ -626,11 +712,17 @@ frameborder="1"
     const c = canvas3d();
     const drawing = state === "ready" && fed && !(c && c.hidden);
     show3d(drawing);
-    if (drawing) show2d(false);
-    else if (state.indexOf("failed:") === 0) fail(state.slice(7));
+    if (drawing) {
+      show2d(false);
+      const now = Date.now();
+      if (!fedAt) fedAt = now;
+      watchSpeed(relay, now);
+    } else if (state.indexOf("failed:") === 0) fail(state.slice(7));
   }, 150);
   button.addEventListener("click", function () {
     if (!broken) {
+      // 3D chosen again after it was dropped for being slow: the player's call
+      if (!on && slowDropped) slowAccepted = true;
       set(on ? 0 : 1);
       if (!broken) remember(on ? "3d" : "2d");
     }
@@ -655,6 +747,12 @@ frameborder="1"
     set: function (value, reason) { set(Number(value), reason || ""); return on; },
     toggle: function () { return this.set(on ? 0 : 1); },
     unavailable: function () { return broken; },
+    // 1 once the page went back to 2D because 3D was too slow (not a
+    // failure: the button still offers 3D)
+    slowed: function () { return slowDropped ? 1 : 0; },
+    // the slow check's last second ({typical, drawMs, frames, stalls}, JSON,
+    // "" before the first) and how many slow seconds in a row, for testing
+    speed: function () { return JSON.stringify({last: lastWindow ? JSON.parse(lastWindow) : null, slowSeconds: slowWindows}); },
     // the view the page started in: "2d" or "3d"
     starting: startingView,
     // where the button is, in CSS pixels from the viewport's top left

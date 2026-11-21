@@ -330,6 +330,14 @@ def follow():  # call once per frame
             handle(event)   # the game's own 2D handler
 ```
 
+The page goes back to 2D by itself, with the reason on screen, when 3D can't
+start or when its drawing stays too slow once the game draws in it (for 5
+seconds the typical frame and the kit's average frame are over 66 ms and the
+relay's own drawing at least a quarter of the typical frame, with Strata's kit at its lowest tier and pixel density 1;
+the game's own pauses don't count); the
+latter is not remembered, the button brings 3D back, and `?slow=0` in the
+address turns it off.
+
 ## The wire format
 
 The messages `Grid3DWebView` sends, as functions: Strata's

@@ -557,7 +557,7 @@ def test_2d_shows_until_3d_draws_the_game_and_comes_back_with_a_reason():
     # the 2D canvas hides only once the game has sent the 3D view something
     assert "fed = true" in block
     assert 'const drawing = state === "ready" && fed && !(c && c.hidden);' in block
-    assert "if (drawing) show2d(false);" in block
+    assert "if (drawing) {\n      show2d(false);" in block
     # failures say why, in words, on the page
     assert 'id="graphik3d-note"' in block and 'role="status"' in block
     assert "No 3D view here: " in block and "The 2D view stays." in block
