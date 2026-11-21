@@ -55,6 +55,40 @@ jobs:
           SDL_AUDIODRIVER: dummy
         run: python -m pytest
 
+  grid3d-render:
+    # The rest of the suite runs without Strata, so its render tests (a board
+    # drawn headless and compared with golden/board-4x3.png, a frame mid-tick)
+    # skip there. This job installs the strata extra and draws them for real,
+    # headless through EGL on Mesa's llvmpipe (no GPU, no display), and
+    # GRAPHIK_REQUIRE_STRATA turns a skip into a failure. The binding fetches
+    # the pinned Strata release library (view.STRATA_VERSION) from GitHub and
+    # checks its SHA-256. The browser backend has no render here: Strata's own
+    # CI draws the grid relay in Chromium against desktop stills.
+    name: grid3d render (Strata, llvmpipe)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Mesa (EGL, llvmpipe)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libegl1 libegl-mesa0 libgl1-mesa-dri libgles2
+
+      - name: Install package with test and strata dependencies
+        run: python -m pip install --upgrade pip && python -m pip install -e ".[test,strata]"
+
+      - name: grid3d tests, rendering included
+        env:
+          SDL_VIDEODRIVER: dummy
+          SDL_AUDIODRIVER: dummy
+          GALLIUM_DRIVER: llvmpipe
+          GRAPHIK_REQUIRE_STRATA: "1"
+        run: python -m pytest -rs src/test/python/preponderous/graphik/grid3d
+
   archive-install:
     # Consumers install graphik from a release tag's source archive, e.g.
     #   graphik @ https://github.com/Stephenson-Software/graphik/archive/refs/tags/v0.3.0.zip

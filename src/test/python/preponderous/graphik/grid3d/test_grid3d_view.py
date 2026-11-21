@@ -282,6 +282,9 @@ def openHeadless(width=240, height=180, clock=None):
             return Grid3DView.open(width, height, headless=True)
         return Grid3DView.open(width, height, headless=True, clock=clock)
     except Unavailable as reason:
+        if os.environ.get("GRAPHIK_REQUIRE_STRATA"):
+            # CI's grid3d render job: a skip there would hide a broken render
+            pytest.fail("Strata can't run here, and GRAPHIK_REQUIRE_STRATA is set: %s" % reason)
         pytest.skip("Strata can't run here: %s" % reason)
 
 
