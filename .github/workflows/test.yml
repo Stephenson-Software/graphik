@@ -132,6 +132,10 @@ jobs:
           import pygame
           import preponderous.graphik as package
           from preponderous.graphik import Graphik
+          # grid3d's subpackages and page template ship in the archive too
+          from preponderous.graphik.grid3d import adapters, ports, web
+          assert os.path.isfile(web.templatePath()), web.templatePath()
+          assert "site-packages" in adapters.__file__ and ports.SceneRenderer
 
           assert package.__version__ == os.environ["VERSION"], package.__version__
           assert "site-packages" in package.__file__, package.__file__
