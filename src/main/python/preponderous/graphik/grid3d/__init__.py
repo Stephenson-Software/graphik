@@ -14,6 +14,8 @@ under a pointer, where a point lands on screen), text in Strata's font
 stand-in for running 2D screens under a 3D view (ui.py), and a bar of
 on-screen keys for touch screens, drawn alike in 2D and 3D (touchkeys.py).
 
+The API reference, with an example for each part, is docs/grid3d.md.
+
 Importing this package imports neither Strata nor pygame.
 """
 
@@ -57,6 +59,7 @@ from .ui import (
     Button,
     RecordedButton,
     RecordedDisplay,
+    RecordedImage,
     RecordedRect,
     RecordedText,
     ScreenRecorder,
@@ -76,7 +79,7 @@ __all__ = [
     "Camera", "Label", "Light", "Panel", "Scene", "SceneLimitError", "Shape",
     "fitText", "rgb255", "rgba", "shade",
     "centredLabel", "measureText", "wrapText",
-    "Button", "RecordedButton", "RecordedDisplay", "RecordedRect", "RecordedText",
+    "Button", "RecordedButton", "RecordedDisplay", "RecordedImage", "RecordedRect", "RecordedText",
     "ScreenRecorder", "drawButtons", "hoverColor",
     "MIN_TARGET", "MORE", "KeySlot", "TouchKey", "TouchKeys",
     "STRATA_VERSION", "Grid3DView", "Unavailable",

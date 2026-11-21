@@ -105,3 +105,76 @@ def test_the_command_line_copies_the_relay_and_reports_failures_plainly(tmp_path
     monkeypatch.setattr(relay, "_download", offline)
     assert relay.main(["--strata", "0.9.0", "--dest", str(tmp_path)]) == 1
     assert "no network" in capsys.readouterr().err
+
+
+# -- hardening
+
+
+def test_a_refused_tarball_writes_nothing(tmp_path):
+    # the escaping member comes last: nothing before it may have been written
+    evil = tarball(DIST_FILES, extra=[("x/" + relay.DIST + "../../../../escape.js", b"bad")])
+    download, _ = release(evil)
+    web = tmp_path / "web"
+    with pytest.raises(relay.RelayFetchError, match="refusing"):
+        relay.fetchRelay("0.9.0", str(web), download=download)
+    assert not web.exists() or os.listdir(web) == []
+
+
+def test_links_and_devices_in_the_relay_folder_are_refused(tmp_path):
+    for kind in (tarfile.SYMTYPE, tarfile.LNKTYPE, tarfile.CHRTYPE):
+        buffer = io.BytesIO()
+        with tarfile.open(fileobj=buffer, mode="w:gz") as archive:
+            info = tarfile.TarInfo(relay.DIST + "grid-relay.js")
+            info.type = kind
+            info.linkname = "/etc/passwd"
+            archive.addfile(info)
+        with pytest.raises(relay.RelayFetchError, match="not a plain file"):
+            relay.extractDist(buffer.getvalue(), str(tmp_path / "web"))
+
+
+def test_a_folder_in_dest_that_links_elsewhere_cant_carry_a_file_out(tmp_path):
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    web = tmp_path / "web"
+    web.mkdir()
+    os.symlink(str(elsewhere), str(web / "sub"))
+    data = tarball({"sub/x.js": b"x"})
+    with pytest.raises(relay.RelayFetchError, match="outside"):
+        relay.extractDist(data, str(web))
+    assert os.listdir(elsewhere) == []
+
+
+def test_an_oversized_relay_folder_is_refused(tmp_path, monkeypatch):
+    monkeypatch.setattr(relay, "MAX_DIST_BYTES", 10)
+    with pytest.raises(relay.RelayFetchError, match="over"):
+        relay.extractDist(tarball(DIST_FILES), str(tmp_path))
+
+
+def test_replace_updates_an_earlier_relay_but_never_the_games_page(tmp_path, capsys, monkeypatch):
+    web = tmp_path / "web"
+    web.mkdir()
+    (web / "index.html").write_bytes(b"<html>the game</html>")
+    (web / "grid-relay.js").write_bytes(b"// an older relay")
+    download, _ = release(tarball(DIST_FILES))
+    monkeypatch.setattr(relay, "_download", download)
+    assert relay.main(["--strata", "0.9.0", "--dest", str(web)]) == 0
+    assert (web / "grid-relay.js").read_bytes() == b"// an older relay"
+    assert "--replace replaces them" in capsys.readouterr().err
+    assert relay.main(["--strata", "0.9.0", "--dest", str(web), "--replace"]) == 0
+    assert (web / "grid-relay.js").read_bytes() == b"// relay"
+    assert (web / "index.html").read_bytes() == b"<html>the game</html>"
+
+
+@pytest.mark.parametrize("version", ["../../evil", "0.9", "v0.9.0", "0.9.0/../x", "", "0.9.0 "])
+def test_only_a_release_version_goes_into_the_download_url(version):
+    with pytest.raises(relay.RelayFetchError, match="not a Strata release version"):
+        relay.fetchRelay(version, "unused", download=lambda url: pytest.fail("downloaded %s" % url))
+
+
+def test_sha256sums_that_disagree_or_arent_digests_are_refused():
+    name = relay.tarballName("0.9.0")
+    with pytest.raises(relay.RelayFetchError, match="different digests"):
+        relay.expectedDigest("%s  %s\n%s  dist/%s\n" % ("a" * 64, name, "b" * 64, name), name)
+    with pytest.raises(relay.RelayFetchError, match="isn't a SHA-256"):
+        relay.expectedDigest("abc  %s\n" % name, name)
+    assert relay.expectedDigest("%s *%s\n" % ("A" * 64, name), name) == "a" * 64

@@ -34,9 +34,19 @@ def _unit(a):
 
 
 def cameraBasis(camera):
-    """(forward, right, up) unit vectors of a Camera."""
-    forward = _unit(_sub(camera.target, camera.eye))
-    right = _unit(_cross(forward, (0.0, 1.0, 0.0)))
+    """(forward, right, up) unit vectors of a Camera. ValueError for a
+    camera that looks nowhere (its eye on its target) or straight up or
+    down: Strata's look-at, with +y up, has no right or up for those either,
+    so they draw nothing on the desktop; tilt the camera a little instead."""
+    view = _sub(camera.target, camera.eye)
+    if _dot(view, view) == 0.0:
+        raise ValueError("the camera's eye is on its target, so it looks nowhere")
+    forward = _unit(view)
+    side = _cross(forward, (0.0, 1.0, 0.0))
+    if _dot(side, side) < 1e-12:
+        raise ValueError("the camera looks straight %s; tilt it a little (Strata's look-at "
+                         "has +y up)" % ("down" if forward[1] < 0 else "up"))
+    right = _unit(side)
     return forward, right, _cross(right, forward)
 
 

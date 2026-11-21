@@ -27,7 +27,9 @@ The board and labels are kept between frames; pieces slide between their
 cells over one tick (see animate.Animator).
 """
 
+import ctypes
 import os
+import struct
 import sys
 import time
 
@@ -37,6 +39,39 @@ from .pick import cellScreenPosition, pickCell, projectToScreen
 STRATA_VERSION = "0.8.0"
 STRATA_PLATFORMS = ("linux", "win32")
 INSTALL_HINT = "pip install 'graphik[strata]'"
+
+
+# Strata's StrataRenderItem: int32 kind, float3 position, float3 scale,
+# float4 colour (44 bytes)
+_RENDER_ITEM = struct.Struct("<i3f3f4f")
+
+
+def renderItems(strata, shapes):
+    """The shapes as the binding's RenderItems: a ctypes array, which
+    submit_primitives takes without a copy, packed in one pass. Building a
+    RenderItem object per shape costs about eight times as much, and a board
+    of a few thousand tiles is drawn every frame. A shape the fast path
+    can't pack (a 3-part colour), or a binding whose RenderItem isn't the
+    44-byte structure, gets a list of RenderItem objects as before."""
+    shapes = list(shapes)
+    item = strata.RenderItem
+    if isinstance(item, type) and issubclass(item, ctypes.Structure) \
+            and ctypes.sizeof(item) == _RENDER_ITEM.size:
+        pack = _RENDER_ITEM.pack
+        try:
+            data = b"".join([pack(sh.kind, *sh.position, *sh.scale, *sh.color) for sh in shapes])
+        except (struct.error, TypeError):
+            pass
+        else:
+            return (item * len(shapes)).from_buffer_copy(data)
+    return [item(sh.kind, sh.position, sh.scale, sh.color) for sh in shapes]
+
+
+def labelBytes(text):
+    """A label's text as Strata takes it: UTF-8 with no NUL (a C string would
+    end there; the browser backend drops them too), a lone surrogate as '?'
+    (what Strata draws for any character outside its font)."""
+    return str(text).replace("\0", "").encode("utf-8", "replace")
 
 
 class Unavailable(Exception):
@@ -247,9 +282,7 @@ class Grid3DView(ViewGeometry):
             lights.append(point)
         engine.set_point_lights(lights)
         engine.begin_frame(clear_color=scene.clearColor)
-        engine.submit_primitives(
-            [s.RenderItem(sh.kind, sh.position, sh.scale, sh.color) for sh in scene.shapes]
-        )
+        engine.submit_primitives(renderItems(s, scene.shapes))
         if scene.panels:
             engine.submit_rects(
                 [s.Rect(p.x, p.y, p.width, p.height, p.color) for p in scene.panels]
@@ -257,8 +290,7 @@ class Grid3DView(ViewGeometry):
         if scene.labels:
             engine.submit_text(
                 [
-                    s.Text(l.x, l.y, l.pixelSize, s.TEXT_SHADOW, l.color,
-                           l.text.encode("utf-8"))
+                    s.Text(l.x, l.y, l.pixelSize, s.TEXT_SHADOW, l.color, labelBytes(l.text))
                     for l in scene.labels
                 ]
             )
