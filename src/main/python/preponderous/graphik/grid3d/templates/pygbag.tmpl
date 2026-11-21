@@ -473,7 +473,8 @@ frameborder="1"
 (function () {
   "use strict";
   // window.Graphik3D: the page's 2D/3D switch, read by grid3d.web.wants3D()
-  // and set by grid3d.web.set3D(); its area() by grid3d.web.buttonArea().
+  // and set by grid3d.web.set3D(); its area() by grid3d.web.buttonArea(),
+  // its touch() by grid3d.web.touchScreen().
   // Strings and numbers only (pygbag's bridge).
   const button = document.getElementById("graphik3d");
   const note = document.getElementById("graphik3d-note");
@@ -623,6 +624,17 @@ frameborder="1"
     const c = on ? canvas3d() : canvas2d();
     if (c && c.focus) c.focus();
   });
+  // A touch screen: a coarse pointer, or a touch already seen (a laptop's
+  // touch screen), unless the address says ?touch=0 or ?touch=1.
+  let touchSeen = false;
+  window.addEventListener("touchstart", function () { touchSeen = true; }, {capture: true, passive: true});
+  function touchScreen() {
+    let asked = "";
+    try { asked = new URLSearchParams(window.location.search).get("touch") || ""; } catch (e) { asked = ""; }
+    if (asked === "1" || asked === "0") return Number(asked);
+    if (touchSeen) return 1;
+    try { return window.matchMedia("(pointer: coarse)").matches ? 1 : 0; } catch (e) { return 0; }
+  }
   window.Graphik3D = {
     // on, and the relay's scripts are in (so Grid3DWebView.open() can begin)
     wanted: function () { return on && scripts === "ready" ? 1 : 0; },
@@ -638,6 +650,8 @@ frameborder="1"
       if (!r.width || !r.height) return "";
       return [r.left, r.top, r.width, r.height].map(function (v) { return Math.round(v); }).join(",");
     },
+    // 1 on a touch screen, where a game shows its on-screen keys
+    touch: touchScreen,
   };
   label();
   if (startingView() === "3d") {

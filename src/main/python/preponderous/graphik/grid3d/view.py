@@ -69,11 +69,36 @@ class ViewGeometry:
     """Where things are on screen, for a view with `board`, `width` and
     `height` (Grid3DView and Grid3DWebView)."""
 
+    # pixels at the top and bottom of the window kept clear of the board
+    # (setInsets); None for fitCamera's own framing
+    insets = None
+
+    def setInsets(self, top=None, bottom=None):
+        """Keeps `top` pixels at the top of the window (a HUD) and `bottom`
+        at the bottom (a bar of touch keys) clear of the board: the camera
+        fits the board in the space between. None for both (the default)
+        frames the board as fitCamera does for the window's shape. Returns
+        whether anything changed."""
+        insets = None if top is None and bottom is None else (top or 0, bottom or 0)
+        if insets == self.insets:
+            return False
+        self.insets = insets
+        return True
+
+    def insetFractions(self):
+        """(top, bottom) as fractions of the window's height, or (None,
+        None) when no insets are set."""
+        if self.insets is None or not self.height:
+            return None, None
+        top, bottom = self.insets
+        return top / float(self.height), bottom / float(self.height)
+
     def camera(self):
         """The camera the current board is drawn with at this window size."""
         if self.board is None:
             raise RuntimeError("setBoard() must come before the camera")
-        return self.board.camera(self.width / float(self.height))
+        top, bottom = self.insetFractions()
+        return self.board.camera(self.width / float(self.height), top=top, bottom=bottom)
 
     def pickCell(self, x, y):
         """The board (column, row) under window pixel (x, y), or None."""
@@ -185,6 +210,8 @@ class Grid3DView(ViewGeometry):
             lights=self.boardLights,
             aspect=self.width / float(self.height),
             tint=self.boardTint,
+            top=self.insetFractions()[0],
+            bottom=self.insetFractions()[1],
         )
 
     def frame(self, now=None, present=True):

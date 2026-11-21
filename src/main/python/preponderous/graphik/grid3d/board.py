@@ -12,6 +12,7 @@ and `viewport` draws only a window of the board (a close-up around one
 cell). `scene(highlight=...)` lights the tile under the pointer.
 """
 
+import functools
 import math
 from dataclasses import dataclass, field
 from typing import Callable, Dict, Hashable, List, Optional, Tuple
@@ -160,11 +161,59 @@ def cellCenter(column, row, columns, rows):
     return (column - (columns - 1) / 2.0, row - (rows - 1) / 2.0)
 
 
-def fitCamera(columns, rows, aspect=1.0, fovDegrees=42.0):
-    """A camera south of the board, tilted down about 55 degrees, far enough
-    back that the whole board and its frame fit, aiming a little beyond the
-    centre so the board sits low in the window and leaves the top rows of the
-    screen for a HUD. A tall window backs the camera off further."""
+# The camera's tilt below the horizon, in degrees: fitCamera's desktop
+# framing looks down about 55 degrees; a portrait window (a phone held
+# upright) looks down more steeply, so the board stands taller on screen and
+# fills more of the tall, narrow window.
+LANDSCAPE_PITCH = math.degrees(math.atan2(1.35, 0.95))
+PORTRAIT_PITCH = 70.0
+# Below this aspect (width / height) a window is fully "portrait"; from here
+# to 1 the framing blends from portrait to the desktop's.
+PORTRAIT_ASPECT = 0.8
+# How much of a portrait window's height is kept free for a HUD at the top
+# (and a little at the bottom) when the caller doesn't say, and the margins
+# kept inside whatever area the board is fitted to.
+DEFAULT_TOP, DEFAULT_BOTTOM = 0.12, 0.03
+SIDE_MARGIN, END_MARGIN = 0.02, 0.02
+
+
+def fitCamera(columns, rows, aspect=1.0, fovDegrees=42.0, top=None, bottom=None):
+    """A camera south of the board, looking down at it, far enough back that
+    the whole board and its frame fit.
+
+    A landscape (or square) window with nothing reserved keeps the desktop
+    framing: tilted down about 55 degrees, aiming a little beyond the centre
+    so the board sits low in the window and leaves the top rows of the screen
+    for a HUD.
+
+    A portrait window (aspect below 1, a phone held upright) is framed for its
+    shape instead: the camera looks down more steeply and the board fills the
+    window's width and stands in the middle of the space left between `top`
+    and `bottom`. Between PORTRAIT_ASPECT and 1 the two framings blend, so
+    resizing a window across square doesn't make the board jump.
+
+    `top` and `bottom` are the fractions (0-1) of the window's height kept
+    clear of the board: a HUD across the top, a bar of touch keys at the
+    bottom. Given either (in any window shape), the board is fitted inside
+    the space between them. Left out, a portrait window keeps DEFAULT_TOP and
+    DEFAULT_BOTTOM clear and a landscape one is framed as on the desktop."""
+    aspect = max(float(aspect), 0.05)
+    reserved = top is not None or bottom is not None
+    if not reserved and aspect >= 1.0:
+        return _desktopCamera(columns, rows, aspect, fovDegrees)
+    portrait = _portraitWeight(aspect)
+    pitch = LANDSCAPE_PITCH + (PORTRAIT_PITCH - LANDSCAPE_PITCH) * portrait
+    top = DEFAULT_TOP if top is None else top
+    bottom = DEFAULT_BOTTOM if bottom is None else bottom
+    fitted = _fittedCamera(columns, rows, aspect, fovDegrees, pitch, top, bottom)
+    if reserved or portrait >= 1.0:
+        return fitted
+    # a nearly square window: part way from the desktop framing to this one
+    return _blendCameras(_desktopCamera(columns, rows, aspect, fovDegrees), fitted, portrait)
+
+
+def _desktopCamera(columns, rows, aspect, fovDegrees):
+    # graphik 0.5.1's framing, unchanged for landscape windows
     size = max(columns, rows) + 1.0  # the frame adds about half a cell a side
     size *= max(1.0, 1.0 / max(aspect, 0.5))
     distance = 0.86 * size + 0.9
@@ -173,6 +222,101 @@ def fitCamera(columns, rows, aspect=1.0, fovDegrees=42.0):
         target=(0.0, -0.3, -0.04 * size),
         fovDegrees=fovDegrees,
     )
+
+
+def _portraitWeight(aspect):
+    """0 for a landscape or square window, 1 at PORTRAIT_ASPECT and below."""
+    if aspect >= 1.0:
+        return 0.0
+    if aspect <= PORTRAIT_ASPECT:
+        return 1.0
+    return (1.0 - aspect) / (1.0 - PORTRAIT_ASPECT)
+
+
+def _blendCameras(a, b, weight):
+    mix = lambda p, q: tuple(x + (y - x) * weight for x, y in zip(p, q))  # noqa: E731
+    return Camera(eye=mix(a.eye, b.eye), target=mix(a.target, b.target),
+                  fovDegrees=a.fovDegrees + (b.fovDegrees - a.fovDegrees) * weight)
+
+
+# what fitCamera keeps in view: the board's tiles and frame (half a cell
+# past its edge, less a little), from under the tiles to the height of a
+# typical piece
+_EDGE, _LOW, _HIGH = 0.35, -0.18, 0.5
+
+
+def _boardExtent(columns, rows, eye, forward, right, up, focal, aspect):
+    """The board's bounding box on screen, in normalised device
+    coordinates: (left, bottom, right, top)."""
+    xs, ys = [], []
+    for x in (-columns / 2.0 - _EDGE, columns / 2.0 + _EDGE):
+        for z in (-rows / 2.0 - _EDGE, rows / 2.0 + _EDGE):
+            for y in (_LOW, _HIGH):
+                d = (x - eye[0], y - eye[1], z - eye[2])
+                depth = d[0] * forward[0] + d[1] * forward[1] + d[2] * forward[2]
+                if depth <= 1e-6:
+                    return None
+                xs.append(focal / aspect * (d[0] * right[0] + d[1] * right[1] + d[2] * right[2]) / depth)
+                ys.append(focal * (d[0] * up[0] + d[1] * up[1] + d[2] * up[2]) / depth)
+    return min(xs), min(ys), max(xs), max(ys)
+
+
+@functools.lru_cache(maxsize=256)
+def _fittedCamera(columns, rows, aspect, fovDegrees, pitch, top, bottom):
+    """The camera at `pitch` degrees below the horizon that shows the board
+    as big as it fits, with SIDE_MARGIN at the sides and END_MARGIN above
+    and below, in the window's height between `top` and `bottom` (fractions
+    of it), centred in that space."""
+    top = min(max(float(top), 0.0), 0.9)
+    bottom = min(max(float(bottom), 0.0), 0.9 - top)
+    # the space the board may fill, in normalised device coordinates (y up)
+    ndcTop = 1.0 - 2.0 * (top + END_MARGIN)
+    ndcBottom = -1.0 + 2.0 * (bottom + END_MARGIN)
+    if ndcTop - ndcBottom < 0.1:
+        ndcTop, ndcBottom = 0.05, -0.05
+    ndcWidth = 2.0 * (1.0 - 2.0 * SIDE_MARGIN)
+    middle = (ndcTop + ndcBottom) / 2.0
+    tilt = math.radians(pitch)
+    back = (0.0, math.sin(tilt), math.cos(tilt))  # from the target to the eye
+    forward = (0.0, -back[1], -back[2])
+    right = (1.0, 0.0, 0.0)
+    up = (0.0, back[2], -back[1])  # right x forward
+    focal = 1.0 / math.tan(math.radians(fovDegrees) / 2.0)
+
+    def extent(distance, shift):
+        # the target slides along the board's depth (z) by `shift`
+        eye = (0.0, distance * back[1], shift + distance * back[2])
+        return _boardExtent(columns, rows, eye, forward, right, up, focal, aspect)
+
+    def centred(distance):
+        # the shift that puts the board's middle in the middle of the space
+        low, high = -4.0 * (rows + columns) - 10.0, 4.0 * (rows + columns) + 10.0
+        for _ in range(36):
+            shift = (low + high) / 2.0
+            box = extent(distance, shift)
+            if box is not None and (box[1] + box[3]) / 2.0 < middle:
+                # the camera moving south (larger z) raises the board on screen
+                low = shift
+            else:
+                high = shift
+        return (low + high) / 2.0
+
+    def fits(distance):
+        shift = centred(distance)
+        box = extent(distance, shift)
+        return box is not None and box[2] - box[0] <= ndcWidth and box[3] - box[1] <= ndcTop - ndcBottom
+
+    near, far = 0.5, 10.0 * (columns + rows) + 20.0
+    for _ in range(36):
+        distance = (near + far) / 2.0
+        if fits(distance):
+            far = distance
+        else:
+            near = distance
+    shift = centred(far)
+    target = (0.0, 0.0, shift)
+    eye = (0.0, far * back[1], shift + far * back[2])
+    return Camera(eye=eye, target=target, fovDegrees=fovDegrees)
 
 
 class GridBoard:
@@ -232,9 +376,11 @@ class GridBoard:
     def contains(self, column, row):
         return 0 <= column < self.columns and 0 <= row < self.rows
 
-    def camera(self, aspect=1.0):
+    def camera(self, aspect=1.0, top=None, bottom=None):
+        """fitCamera for what is on show; `top` and `bottom` are the
+        fractions of the window's height kept clear of the board."""
         columns, rows = self.shownSize()
-        return fitCamera(columns, rows, aspect)
+        return fitCamera(columns, rows, aspect, top=top, bottom=bottom)
 
     def cellAt(self, x, z):
         """The visible board cell under world point (x, z), or None."""
@@ -446,11 +592,13 @@ class GridBoard:
 
     def scene(self, pieces=(), positions=None, labels=(), panels=(), lights=(),
               aspect=1.0, tint=None, clearColor=None, highlight=None,
-              highlightColor=None):
+              highlightColor=None, top=None, bottom=None):
         """A complete Scene, checked against the engine limits. `highlight`
-        is a (column, row) whose tile gets the hover slab, drawn last."""
+        is a (column, row) whose tile gets the hover slab, drawn last.
+        `top` and `bottom` are the fractions of the window's height the
+        camera keeps clear of the board (see fitCamera)."""
         pieceShapes, pieceLights = self.pieceShapes(pieces, positions)
-        scene = Scene(camera=self.camera(aspect))
+        scene = Scene(camera=self.camera(aspect, top=top, bottom=bottom))
         scene.shapes = (self.boardShapes(tint) + pieceShapes
                         + self.highlightShapes(highlight, highlightColor))
         scene.lights = list(lights) + pieceLights
