@@ -39,10 +39,16 @@ def theme():
 # -- importing
 
 
-def test_importing_grid3d_loads_neither_strata_nor_pygame():
+def test_importing_grid3d_loads_neither_strata_nor_pygame(monkeypatch):
+    # monkeypatch puts the deleted modules back afterwards, so later tests
+    # and the modules they imported keep one copy of each class (a second
+    # copy of grid3d would raise an Unavailable their imports don't match)
     for name in list(sys.modules):
         if name == "strata" or name.startswith("strata.") or name.startswith("preponderous.graphik.grid3d"):
-            del sys.modules[name]
+            monkeypatch.delitem(sys.modules, name)
+    graphik = sys.modules.get("preponderous.graphik")
+    if graphik is not None and hasattr(graphik, "grid3d"):
+        monkeypatch.delattr(graphik, "grid3d")
     pygameLoaded = "pygame" in sys.modules
     importlib.import_module("preponderous.graphik.grid3d")
     assert "strata" not in sys.modules
